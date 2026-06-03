@@ -1,6 +1,7 @@
 import db from '../db.js';
 
 export const getCourses = (req, res) => {
+    try{
     db.all('SELECT * FROM courses ORDER BY order_index', [], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
@@ -8,9 +9,19 @@ export const getCourses = (req, res) => {
 
         res.json(rows);
     });
-};
+}
+    catch (error) {
+            console.error('Error fetching course:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Internal server error',
+                error: error.message
+            });
+        }
+        };
 
 export const getCourse = (req, res) => {
+    try{
     const { courseId } = req.params;
 
     const sql = ` SELECT * FROM courses WHERE id = ? `;
@@ -26,4 +37,12 @@ export const getCourse = (req, res) => {
 
         res.json(course);
     });
+    } catch (error) {
+        console.error('Error fetching course:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
 };
