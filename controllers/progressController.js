@@ -62,12 +62,11 @@ export const completeLessonAttempt = (req, res) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-
+        //If score >= 60 you pass. Every question is worth 20 points because every test has 5 questions.
         const totalQuestions = result.total_questions || 0;
         const correctAnswers = result.correct_answers || 0;
         const score = totalQuestions === 0 ? 0 : Math.round((correctAnswers / totalQuestions) * 100);
 
-        //If score >= 60 you pass. Every question is worth 20 points.
         const passed = score >= 60 ? 1 : 0;
         const updateSql = ` UPDATE lesson_attempts SET  score = ?, total_questions = ?, passed = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? `;
 
@@ -77,5 +76,28 @@ export const completeLessonAttempt = (req, res) => {
             }
             res.json({ attemptId: Number(attemptId), score, totalQuestions, correctAnswers, passed: Boolean(passed) });
         });
+    });
+};
+export const getLessonAttempts = (req, res) => {
+    const { lessonId } = req.params;
+    const { userId } = req.query;
+
+    let sql = ` SELECT  id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts WHERE lesson_id = ? `;
+
+    const params = [lessonId];
+    if (userId) {
+        sql += ` AND user_id = ?`;
+        params.push(userId);
+    }
+    sql += ` ORDER BY score DESC, created_at DESC`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows.map(row => ({
+            ...row,
+            passed: Boolean(row.passed)
+        })));
     });
 };
