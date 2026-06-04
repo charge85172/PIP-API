@@ -1,9 +1,6 @@
-// de code is opnieuw geschreven en extra dingen toegevoegd, vond dit een betere manier. IS
-
-// import crypto from 'node:crypto';
-// import { promisify } from 'node:util';
 import db from '../db.js';
 import bcrypt from 'bcrypt';
+import { initializeUserProgress } from './progressController.js';
 
 // database promises
 const dbGet = (sql, params = []) => {
@@ -40,41 +37,6 @@ const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-/**
- * Initialiseer een nieuwe gebruiker met standaard progressie
- */
-const initializeUserProgress = async (userId) => {
-    // get all lessons
-    const lessons = await dbAll(
-        `SELECT l.id 
-         FROM lessons l
-         JOIN modules m ON m.id = l.module_id
-         WHERE l.is_published = 1
-         ORDER BY m.order_index, l.order_index`
-    );
-
-    // user_progress entries
-    for (const lesson of lessons) {
-        await dbRun(
-            `INSERT INTO user_progress (user_id, lesson_id, completed, completed_at, last_opened_at)
-             VALUES (?, ?, 0, NULL, CURRENT_TIMESTAMP)`,
-            [userId, lesson.id]
-        );
-    }
-
-    // user_streaks entry aan
-    await dbRun(
-        `INSERT INTO user_streaks (user_id, current_streak, highest_streak, last_active_date)
-         VALUES (?, 0, 0, DATE('now'))`,
-        [userId]
-    );
-
-    console.log(`User progress initialized for user ${userId}, ${lessons.length} lessons added`);
-};
-
-/**
- * POST /api/register - Nieuwe gebruiker registreren
- */
 export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
 
@@ -114,7 +76,7 @@ export const registerUser = async (req, res) => {
             });
         }
 
-        // Hash het wachtwoord met bcrypt
+        // Hash password with bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
@@ -155,9 +117,6 @@ export const registerUser = async (req, res) => {
     }
 };
 
-/**
- * POST /api/login - Gebruiker inloggen
- */
 export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
@@ -206,15 +165,11 @@ export const loginUser = async (req, res) => {
     } catch (error) {
         console.error('Login Error:', error);
         res.status(500).json({
-            success: false,
-            message: 'Internal server error during login.'
+            success: false, message: 'Internal server error during login.'
         });
     }
 };
 
-/**
- * GET /api/users/:id - Gebruiker ophalen
- */
 export const getUserById = async (req, res) => {
     const { id } = req.params;
 
@@ -228,151 +183,18 @@ export const getUserById = async (req, res) => {
 
         if (!user) {
             return res.status(404).json({
-                success: false,
-                message: 'User not found.'
+                success: false, message: 'User not found.'
             });
         }
 
         res.json({
-            success: true,
-            data: { user }
+            success: true, data: { user }
         });
 
     } catch (error) {
         console.error('Get User Error:', error);
         res.status(500).json({
-            success: false,
-            message: 'Internal server error.'
+            success: false, message: 'Internal server error.'
         });
     }
 };
-
-/**
- * GET /api/users/:id/progress - Voortgang van een gebruiker ophalen
- */
-export const getUserProgress = async (req, res) => {
-    const {id} = req.params;
-
-    try {
-        // check if user exist
-        const user = await dbGet(`SELECT id
-                                  FROM users
-                                  WHERE id = ?`, [id]);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found.'
-            });
-        }
-
-        // get all completed lessons
-        const completedLessons = await dbAll(
-            `SELECT lesson_id, completed, completed_at
-             FROM user_progress
-             WHERE user_id = ?
-               AND completed = 1`,
-            [id]
-        );
-
-        // get streak info
-        const streak = await dbGet(
-            `SELECT current_streak, highest_streak, last_active_date
-             FROM user_streaks
-             WHERE user_id = ?`,
-            [id]
-        );
-
-        // get rewatds
-        const rewards = await dbAll(
-            `SELECT r.title, r.description, ur.unlocked_at
-             FROM user_rewards ur
-             JOIN rewards r ON r.id = ur.reward_id
-             WHERE ur.user_id = ?`,
-            [id]
-        );
-
-        res.json({
-            success: true,
-            data: {
-                completed_lessons_count: completedLessons.length,
-                completed_lessons: completedLessons,
-                streak: streak || {current_streak: 0, highest_streak: 0},
-                rewards: rewards
-            }
-        });
-
-    } catch (error) {
-        console.error('Get User Progress Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error.'
-        });
-    }
-};
-
-// const scryptAsync = promisify(crypto.scrypt);
-//
-// /**
-//  * Hashes a password asynchronously.
-//  */
-// const hashPassword = async (password) => {
-//     const salt = crypto.randomBytes(16).toString('hex');
-//     const derivedKey = await scryptAsync(password, salt, 64);
-//     return `${salt}:${derivedKey.toString('hex')}`;
-// };
-//
-// /**
-//  * Email validation regex.
-//  */
-// const isValidEmail = (email) => {
-//     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-// };
-//
-// export const registerUser = async (req, res) => {
-//     const { name, email, password } = req.body;
-//
-//     if (!name || !email || !password) {
-//         return res.status(400).json({
-//             error: 'Missing credentials',
-//             message: 'Name, email, and password are required.'
-//         });
-//     }
-//
-//     if (!isValidEmail(email)) {
-//         return res.status(400).json({
-//             error: 'Invalid email',
-//             message: 'Please provide a valid email address.'
-//         });
-//     }
-//
-//     try {
-//         const hashedPassword = await hashPassword(password);
-//         const sql = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`;
-//         const params = [name, email, hashedPassword];
-//
-//         db.run(sql, params, function (err) {
-//             if (err) {
-//                 if (err.errno === 19 || err.message.includes('UNIQUE constraint failed')) {
-//                     return res.status(409).json({
-//                         error: 'Conflict',
-//                         message: 'An account with this email already exists.'
-//                     });
-//                 }
-//                 console.error('Database Error:', err.message);
-//                 return res.status(500).json({ error: 'Internal server error' });
-//             }
-//
-//             res.status(201).json({
-//                 message: 'User registered successfully',
-//                 user: {
-//                     id: this.lastID,
-//                     name: name,
-//                     email: email
-//                 }
-//             });
-//         });
-//     } catch (error) {
-//         console.error('Hashing Error:', error);
-//         res.status(500).json({ error: 'Internal server error during registration.' });
-//     }
-// };
