@@ -1,5 +1,6 @@
 import express from 'express';
-import { getUserById, getUserProgress } from '../controllers/authController.js';
+import { getUserById } from '../controllers/authController.js';
+import { getUserProgress } from '../controllers/userProgressionController.js'
 
 const router = express.Router();
 

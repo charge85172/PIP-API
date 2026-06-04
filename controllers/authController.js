@@ -1,6 +1,6 @@
 import db from '../db.js';
 import bcrypt from 'bcrypt';
-import { initializeUserProgress } from './progressController.js';
+import { initializeUserProgress } from './userProgressionController.js';
 
 // database promises
 const dbGet = (sql, params = []) => {
