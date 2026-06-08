@@ -2,7 +2,9 @@ import db from '../db.js';
 import bcrypt from 'bcrypt';
 import { initializeUserProgress } from './userProgressionController.js';
 
-// database promises
+/**
+ * Helper to wrap db.get in a Promise for single-row queries
+ */
 const dbGet = (sql, params = []) => {
     return new Promise((resolve, reject) => {
         db.get(sql, params, (err, result) => {
@@ -12,15 +14,9 @@ const dbGet = (sql, params = []) => {
     });
 };
 
-const dbRun = (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function(err) {
-            if (err) reject(err);
-            else resolve({ lastID: this.lastID, changes: this.changes });
-        });
-    });
-};
-
+/**
+ * Helper to wrap db.all in a Promise for multi-row queries
+ */
 const dbAll = (sql, params = []) => {
     return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {
@@ -31,16 +27,30 @@ const dbAll = (sql, params = []) => {
 };
 
 /**
- * Email validatie
+ * Helper to wrap db.run in a Promise for insert/update/delete operations
+ */
+const dbRun = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+            if (err) reject(err);
+            else resolve({ lastID: this.lastID, changes: this.changes });
+        });
+    });
+};
+
+/**
+ * Validates the email format using a regular expression
  */
 const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+/**
+ * Registers a new user, hashes the password, and initializes progression
+ */
 export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
 
-    // Validation
     if (!name || !email || !password) {
         return res.status(400).json({
             success: false,
@@ -63,7 +73,6 @@ export const registerUser = async (req, res) => {
     }
 
     try {
-        // Check if email exist
         const existingUser = await dbGet(
             `SELECT id FROM users WHERE email = ?`,
             [email.toLowerCase()]
@@ -76,20 +85,18 @@ export const registerUser = async (req, res) => {
             });
         }
 
-        // Hash password with bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-         // SQL query om nieuwe gebruiker aan te maken
-         const result = await dbRun(
-             `INSERT INTO users (name, email, password_hash, digital_skill_level, experience, current_level_id, on_boarding, created_at, updated_at) 
-              VALUES (?, ?, ?, 'beginner', 0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-             [name, email.toLowerCase(), hashedPassword]
-         );
+        // Updated column name to 'password'
+        const result = await dbRun(
+            `INSERT INTO users (name, email, password, digital_skill_level, experience, current_level_id, on_boarding, created_at, updated_at)
+             VALUES (?, ?, ?, 'beginner', 0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, //onboarding staat nu ff op 1 voro continuiteit maar we moeten deze wel ff op 0 zetten als de onboarding screen moet werken.!!!
+            [name, email.toLowerCase(), hashedPassword]
+        );
 
-         const userId = result.lastID;
+        const userId = result.lastID;
 
-        // Initialiseer user progress
         try {
             await initializeUserProgress(userId);
         } catch (progressError) {
@@ -117,6 +124,9 @@ export const registerUser = async (req, res) => {
     }
 };
 
+/**
+ * Authenticates a user and returns their profile (excluding password)
+ */
 export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
@@ -127,34 +137,36 @@ export const loginUser = async (req, res) => {
         });
     }
 
-     try {
-         // Search user by email
-         const user = await dbGet(
-             `SELECT id, name, email, password_hash, digital_skill_level, experience, current_level_id, on_boarding 
-              FROM users 
-              WHERE email = ?`,
-             [email.toLowerCase()]
-         );
+    try {
+        // Updated column name to 'password'
+        const user = await dbGet(
+            `SELECT id, name, email, password, digital_skill_level, experience, current_level_id, on_boarding
+             FROM users
+             WHERE email = ?`,
+            [email.toLowerCase()]
+        );
 
-         if (!user) {
-             return res.status(401).json({
-                 success: false,
-                 message: 'Invalid email or password.'
-             });
-         }
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password.'
+            });
+        }
 
-         // password bycrypt
-         const isValidPassword = await bcrypt.compare(password, user.password_hash);
+        // Compare using the 'password' field from the database
+        const isValidPassword = await bcrypt.compare(password, user.password);
 
         if (!isValidPassword) {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid email or password.'
             });
-         }
-         const { password_hash: _, ...userWithoutPassword } = user;
+        }
 
-         res.json({
+        // Remove password before sending user data back
+        const { password: _, ...userWithoutPassword } = user;
+
+        res.json({
             success: true,
             message: 'Login successful',
             data: {
@@ -165,36 +177,108 @@ export const loginUser = async (req, res) => {
     } catch (error) {
         console.error('Login Error:', error);
         res.status(500).json({
-            success: false, message: 'Internal server error during login.'
+            success: false,
+            message: 'Internal server error during login.'
         });
     }
 };
 
+/**
+ * Fetches all users from the database for administrative/testing purposes
+ */
+export const getAllUsers = async (req, res) => {
+    try {
+        const users = await dbAll(
+            `SELECT id, name, email, digital_skill_level, experience, on_boarding, created_at FROM users`
+        );
+
+        res.json({
+            success: true,
+            count: users.length,
+            data: { users }
+        });
+    } catch (error) {
+        console.error('Get All Users Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching users.'
+        });
+    }
+};
+
+/**
+ * Fetches profile data for a specific user ID
+ */
 export const getUserById = async (req, res) => {
     const { id } = req.params;
 
     try {
         const user = await dbGet(
-            `SELECT id, name, email, digital_skill_level, experience, current_level_id, on_boarding, created_at, updated_at 
-             FROM users 
+            `SELECT id, name, email, digital_skill_level, experience, current_level_id, on_boarding, created_at, updated_at
+             FROM users
              WHERE id = ?`,
             [id]
         );
 
         if (!user) {
             return res.status(404).json({
-                success: false, message: 'User not found.'
+                success: false,
+                message: 'User not found.'
             });
         }
 
         res.json({
-            success: true, data: { user }
+            success: true,
+            data: { user }
         });
 
     } catch (error) {
         console.error('Get User Error:', error);
         res.status(500).json({
-            success: false, message: 'Internal server error.'
+            success: false,
+            message: 'Internal server error.'
+        });
+    }
+};
+
+/**
+ * Fetches the onboarding completion status for a specific user ID
+ */
+export const getOnboardingStatus = async (req, res) => {
+    const { id } = req.params;
+
+    if (!id || isNaN(id)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Valid User ID is required.'
+        });
+    }
+
+    try {
+        const user = await dbGet(
+            `SELECT on_boarding FROM users WHERE id = ?`,
+            [id]
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found.'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                on_boarding: !!user.on_boarding
+            }
+        });
+
+    } catch (error) {
+        console.error('Get Onboarding Status Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error while fetching onboarding status.'
         });
     }
 };
