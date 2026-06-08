@@ -91,7 +91,7 @@ export const registerUser = async (req, res) => {
         // Updated column name to 'password'
         const result = await dbRun(
             `INSERT INTO users (name, email, password, digital_skill_level, experience, current_level_id, on_boarding, created_at, updated_at)
-             VALUES (?, ?, ?, 'beginner', 0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, //onboarding staat nu ff op 1 voro continuiteit maar we moeten deze wel ff op 0 zetten als de onboarding screen moet werken.!!!
+             VALUES (?, ?, ?, 'beginner', 0, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, // onboarding is currently set to 1 for continuity, but should be 0 if the onboarding screen needs to work.!!!
             [name, email.toLowerCase(), hashedPassword]
         );
 

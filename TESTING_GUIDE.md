@@ -81,3 +81,16 @@ Returns the specific progression levels and statistics for a user.
 - **URL:** /api/users/:id/progress
 
 ---
+### XP Registratie
+Registreert XP voor een specifieke activiteit (bijv. een correct beantwoordde vraag).
+
+- **Method:** POST
+- **URL:** /api/progress/xp
+- **Body (JSON):**
+  {
+  "userId": 1,
+  "activityType": "task_correct_answer",
+  "activityId": 101
+  }
+- **Success Response:** 200 OK (Geeft totaal XP en level terug).
+- **Conflict Response:** 409 Conflict (Als XP voor dit ID al is gegeven).
