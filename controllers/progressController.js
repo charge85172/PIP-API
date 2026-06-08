@@ -13,23 +13,15 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
         }
 
         const progressSql = ` INSERT INTO user_progress (user_id, lesson_id, status, completed_at, last_opened_at, created_at, updated_at)
-                              VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                              ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-                                  status = 'completed',
-                                  completed_at = COALESCE(user_progress.completed_at, CURRENT_TIMESTAMP),
-                                  updated_at = CURRENT_TIMESTAMP `;
+              VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(user_id, lesson_id) DO UPDATE SET status = 'completed', completed_at = COALESCE(user_progress.completed_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP `;
 
         db.run(progressSql, [userId, lessonId], function (err) {
             if (err) {
                 return callback(err);
             }
 
-            const moduleSql = ` SELECT COUNT(*) AS total_lessons,
-                                       SUM(CASE WHEN up.status = 'completed' THEN 1 ELSE 0 END) AS completed_lessons
-                                FROM lessons l
-                                LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ?
-                                WHERE l.module_id = ?
-                                  AND l.is_published = 1 `;
+            const moduleSql = ` SELECT COUNT(*) AS total_lessons, SUM(CASE WHEN up.status = 'completed' THEN 1 ELSE 0 END) 
+            AS completed_lessons FROM lessons l LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ? WHERE l.module_id = ? AND l.is_published = 1 `;
 
             db.get(moduleSql, [userId, lesson.module_id], (err, moduleProgress) => {
                 if (err) {
@@ -41,11 +33,8 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
                     moduleProgress.total_lessons === moduleProgress.completed_lessons;
 
                 const updateCourseStatus = () => {
-                    const courseSql = ` SELECT COUNT(*) AS total_modules,
-                                               SUM(CASE WHEN ums.status = 'completed' THEN 1 ELSE 0 END) AS completed_modules
-                                        FROM modules m
-                                        LEFT JOIN user_module_status ums ON ums.module_id = m.id AND ums.user_id = ?
-                                        WHERE m.course_id = ? `;
+                    const courseSql = ` SELECT COUNT(*) AS total_modules, SUM(CASE WHEN ums.status = 'completed' THEN 1 ELSE 0 END) AS completed_modules 
+                    FROM modules m LEFT JOIN user_module_status ums ON ums.module_id = m.id AND ums.user_id = ? WHERE m.course_id = ? `;
 
                     db.get(courseSql, [userId, lesson.course_id], (err, courseProgress) => {
                         if (err) {
@@ -57,46 +46,26 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
                             courseProgress.total_modules === courseProgress.completed_modules;
 
                         if (!courseCompleted) {
-                            return callback(null, {
-                                lessonCompleted: true,
-                                moduleCompleted,
-                                courseCompleted: false,
-                                moduleId: lesson.module_id,
-                                courseId: lesson.course_id
-                            });
+                            return callback(null, { lessonCompleted: true, moduleCompleted, courseCompleted: false, moduleId: lesson.module_id, courseId: lesson.course_id });
                         }
 
                         const updateCourseSql = ` INSERT INTO user_course_status (user_id, course_id, status, created_at, updated_at)
-                                                  VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                                  ON CONFLICT(user_id, course_id) DO UPDATE SET
-                                                      status = 'completed',
-                                                      updated_at = CURRENT_TIMESTAMP `;
+                              VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(user_id, course_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP `;
 
                         db.run(updateCourseSql, [userId, lesson.course_id], function (err) {
                             if (err) {
                                 return callback(err);
                             }
-
-                            callback(null, {
-                                lessonCompleted: true,
-                                moduleCompleted,
-                                courseCompleted: true,
-                                moduleId: lesson.module_id,
-                                courseId: lesson.course_id
-                            });
+                            callback(null, { lessonCompleted: true, moduleCompleted, courseCompleted: true, moduleId: lesson.module_id, courseId: lesson.course_id });
                         });
                     });
                 };
-
                 if (!moduleCompleted) {
                     return updateCourseStatus();
                 }
 
-                const updateModuleSql = ` INSERT INTO user_module_status (user_id, module_id, status, created_at, updated_at)
-                                          VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                          ON CONFLICT(user_id, module_id) DO UPDATE SET
-                                              status = 'completed',
-                                              updated_at = CURRENT_TIMESTAMP `;
+                const updateModuleSql = ` INSERT INTO user_module_status (user_id, module_id, status, created_at, updated_at) 
+                    VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(user_id, module_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP `;
 
                 db.run(updateModuleSql, [userId, lesson.module_id], function (err) {
                     if (err) {
@@ -198,7 +167,6 @@ export const completeLessonAttempt = (req, res) => {
         const correctAnswers = result.correct_answers || 0;
         const score = totalQuestions === 0 ? 0 : Math.round((correctAnswers / totalQuestions) * 100);
         const passed = score >= 60 ? 1 : 0;
-
         const updateSql = ` UPDATE lesson_attempts SET score = ?, total_questions = ?, passed = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ? `;
 
         db.run(updateSql, [score, totalQuestions, passed, attemptId], function (err) {
@@ -216,37 +184,18 @@ export const completeLessonAttempt = (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: err.message });
                 }
-
                 if (!attempt) {
                     return res.status(404).json({ error: 'Lesson attempt not found' });
                 }
-
                 if (!passed) {
-                    return res.json({
-                        attemptId: Number(attemptId),
-                        score,
-                        totalQuestions,
-                        correctAnswers,
-                        passed: Boolean(passed),
-                        lessonTip: attempt?.lessonTip || null,
-                        progress: null
-                    });
+                    return res.json({ attemptId: Number(attemptId), score, totalQuestions, correctAnswers, passed: Boolean(passed), lessonTip: attempt?.lessonTip || null, progress: null });
                 }
 
                 updateUserProgressAfterCompletedLesson(attempt.user_id, attempt.lesson_id, (err, progress) => {
                     if (err) {
                         return res.status(500).json({ error: err.message });
                     }
-
-                    res.json({
-                        attemptId: Number(attemptId),
-                        score,
-                        totalQuestions,
-                        correctAnswers,
-                        passed: Boolean(passed),
-                        lessonTip: attempt?.lessonTip || null,
-                        progress
-                    });
+                    res.json({ attemptId: Number(attemptId), score, totalQuestions, correctAnswers, passed: Boolean(passed), lessonTip: attempt?.lessonTip || null, progress });
                 });
             });
         });
@@ -254,25 +203,22 @@ export const completeLessonAttempt = (req, res) => {
 };
 
 export const getLessonAttempts = (req, res) => {
-    const {lessonId} = req.params;
-    const {userId} = req.query;
+    const { lessonId, userId } = req.params;
 
-    let sql = ` SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts WHERE lesson_id = ? `;
+    const sql = ` SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts 
+                         WHERE lesson_id = ? AND user_id = ? ORDER BY score DESC, created_at DESC `;
 
-    const params = [lessonId];
-    if (userId) {
-        sql += ` AND user_id = ?`;
-        params.push(userId);
-    }
-    sql += ` ORDER BY score DESC, created_at DESC`;
-
-    db.all(sql, params, (err, rows) => {
+    db.all(sql, [lessonId, userId], (err, rows) => {
         if (err) {
-            return res.status(500).json({error: err.message});
+            return res.status(500).json({ error: err.message });
         }
-        res.json(rows.map(row => ({
-            ...row,
-            passed: Boolean(row.passed)
-        })));
+
+        res.json({
+            attemptCount: rows.length,
+            attempts: rows.map(row => ({
+                ...row,
+                passed: Boolean(row.passed)
+            }))
+        });
     });
 };
