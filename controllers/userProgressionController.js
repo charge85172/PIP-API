@@ -1,4 +1,5 @@
 import db from '../db.js';
+import {awardXP} from "./xpController.js";
 
 /**
  * Helper to wrap db.get in a Promise for single-row queries
@@ -168,16 +169,27 @@ export const getUserProgress = async (req, res) => {
  * PUT /api/users/:id/progress/lesson/:lessonId
  * Marks a lesson as completed and updates parent module/course statuses.
  */
+/**
+ * PUT /api/users/:id/progress/lesson/:lessonId
+ * Markeert een les als voltooid, update parent statuses, streaks en kent XP toe.
+ */
 export const completeLesson = async (req, res) => {
     const { id, lessonId } = req.params;
 
     try {
+        // 1. Validatie: Bestaat de gebruiker?
         const user = await dbGet(`SELECT id FROM users WHERE id = ?`, [id]);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Gebruiker niet gevonden.' });
+        }
 
+        // 2. Validatie: Bestaat de les en is deze gepubliceerd?
         const lesson = await dbGet(`SELECT id FROM lessons WHERE id = ? AND is_published = 1`, [lessonId]);
-        if (!lesson) return res.status(404).json({ success: false, message: 'Lesson not found.' });
+        if (!lesson) {
+            return res.status(404).json({ success: false, message: 'Les niet gevonden of niet gepubliceerd.' });
+        }
 
+        // 3. Update de voortgang naar 'completed'
         const result = await dbRun(
             `UPDATE user_progress
              SET status = 'completed',
@@ -188,21 +200,46 @@ export const completeLesson = async (req, res) => {
         );
 
         if (result.changes === 0) {
-            return res.status(404).json({ success: false, message: 'Progress entry not found.' });
+            return res.status(404).json({ success: false, message: 'Geen voortgangsrecord gevonden voor deze combinatie.' });
         }
 
-        const progress = await updateParentStatusesAfterLessonCompletion(id, lessonId);
+        // 4. Update de status van de bovenliggende module en cursus
+        const parentStatus = await updateParentStatusesAfterLessonCompletion(id, lessonId);
+
+        // 5. Update de streak van de gebruiker
         await updateUserStreak(id);
 
+        // 6. Koppel XP aan de voltooiing (User Story #25)
+        // We geven hier 20 XP voor het afronden van een hele les
+        let xpResult = null;
+        try {
+            xpResult = await awardXP(id, 'lesson_completion', lessonId, 20);
+        } catch (xpError) {
+            console.error('Fout bij toekennen XP tijdens lesvoltooiing:', xpError);
+            // We laten de request niet falen als alleen de XP-toekenning mislukt
+        }
+
+        // 7. Stuur succesvolle response terug inclusief XP data voor de frontend
         res.json({
             success: true,
-            message: 'Lesson marked as completed',
-            progress: { lessonCompleted: true, ...progress }
+            message: 'Les succesvol gemarkeerd als voltooid',
+            data: {
+                lessonCompleted: true,
+                moduleCompleted: parentStatus.moduleCompleted,
+                courseCompleted: parentStatus.courseCompleted,
+                xpAwarded: xpResult?.success ? xpResult.xpAdded : 0,
+                totalXP: xpResult?.success ? xpResult.totalXP : null,
+                level: xpResult?.success ? xpResult.level : null,
+                levelUp: xpResult?.levelUp || false
+            }
         });
 
     } catch (error) {
         console.error('Complete Lesson Error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+        res.status(500).json({
+            success: false,
+            message: 'Interne serverfout bij het voltooien van de les.'
+        });
     }
 };
 
