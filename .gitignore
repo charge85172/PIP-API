@@ -1,6 +1,5 @@
 .env
 node_modules
 .idea
-Database/pip.sqlite
 /Database
 Database/pip.sqlite
