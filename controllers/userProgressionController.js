@@ -1,3 +1,5 @@
+import db from '../db.js';
+
 // database promises
 const dbGet = (sql, params = []) => {
     return new Promise((resolve, reject) => {
@@ -28,32 +30,65 @@ const dbAll = (sql, params = []) => {
 
 // new progress new user
 export const initializeUserProgress = async (userId) => {
-    // get all lessons
     const lessons = await dbAll(
-        `SELECT l.id 
+        `SELECT l.id
          FROM lessons l
-         JOIN modules m ON m.id = l.module_id
+                  JOIN modules m ON m.id = l.module_id
          WHERE l.is_published = 1
          ORDER BY m.order_index, l.order_index`
     );
 
-    // user_progress entries
     for (const lesson of lessons) {
         await dbRun(
-            `INSERT INTO user_progress (user_id, lesson_id, completed, completed_at, last_opened_at)
-             VALUES (?, ?, 0, NULL, CURRENT_TIMESTAMP)`,
+            `INSERT INTO user_progress (user_id, lesson_id, status, completed_at, last_opened_at)
+             VALUES (?, ?, 'open', NULL, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id, lesson_id) DO NOTHING`,
             [userId, lesson.id]
         );
     }
 
-    // user_streaks entry
+    const modules = await dbAll(
+        `SELECT DISTINCT m.id
+         FROM modules m
+         JOIN lessons l ON l.module_id = m.id
+         WHERE l.is_published = 1`
+    );
+
+    for (const module of modules) {
+        await dbRun(
+            `INSERT INTO user_module_status (user_id, module_id, status)
+             VALUES (?, ?, 'open')
+             ON CONFLICT(user_id, module_id) DO NOTHING`,
+            [userId, module.id]
+        );
+    }
+
+    const courses = await dbAll(
+        `SELECT DISTINCT c.id
+         FROM courses c
+         JOIN modules m ON m.course_id = c.id
+         JOIN lessons l ON l.module_id = m.id
+         WHERE c.is_published = 1
+           AND l.is_published = 1`
+    );
+
+    for (const course of courses) {
+        await dbRun(
+            `INSERT INTO user_course_status (user_id, course_id, status)
+             VALUES (?, ?, 'open')
+             ON CONFLICT(user_id, course_id) DO NOTHING`,
+            [userId, course.id]
+        );
+    }
+
     await dbRun(
         `INSERT INTO user_streaks (user_id, current_streak, highest_streak, last_active_date)
-         VALUES (?, 0, 0, DATE('now'))`,
+         VALUES (?, 0, 0, DATE('now'))
+             ON CONFLICT(user_id) DO NOTHING`,
         [userId]
     );
 
-    console.log(`User progress initialized for user ${userId}, ${lessons.length} lessons added`);
+    console.log(`User progress initialized for user ${userId}`);
 };
 
 // GET /api/users/:id/progress
@@ -61,7 +96,6 @@ export const getUserProgress = async (req, res) => {
     const { id } = req.params;
 
     try {
-        // check if user exists
         const user = await dbGet(`SELECT id FROM users WHERE id = ?`, [id]);
 
         if (!user) {
@@ -71,15 +105,13 @@ export const getUserProgress = async (req, res) => {
             });
         }
 
-        // get all completed lessons
         const completedLessons = await dbAll(
-            `SELECT lesson_id, completed, completed_at
+            `SELECT lesson_id, status, completed_at
              FROM user_progress
-             WHERE user_id = ? AND completed = 1`,
+             WHERE user_id = ? AND status = 'completed'`,
             [id]
         );
 
-        // get streak info
         const streak = await dbGet(
             `SELECT current_streak, highest_streak, last_active_date
              FROM user_streaks
@@ -87,11 +119,10 @@ export const getUserProgress = async (req, res) => {
             [id]
         );
 
-        // get rewards
         const rewards = await dbAll(
             `SELECT r.title, r.description, ur.unlocked_at
              FROM user_rewards ur
-             JOIN rewards r ON r.id = ur.reward_id
+                      JOIN rewards r ON r.id = ur.reward_id
              WHERE ur.user_id = ?`,
             [id]
         );
@@ -109,59 +140,145 @@ export const getUserProgress = async (req, res) => {
     } catch (error) {
         console.error('Get User Progress Error:', error);
         res.status(500).json({
-            success: false, message: 'Internal server error.'
+            success: false,
+            message: 'Internal server error.'
         });
     }
 };
 
-//PUT /api/users/:id/progress/lesson/:lessonId
+// PUT /api/users/:id/progress/lesson/:lessonId
 export const completeLesson = async (req, res) => {
     const { id, lessonId } = req.params;
 
     try {
-        // check if user exists
         const user = await dbGet(`SELECT id FROM users WHERE id = ?`, [id]);
+
         if (!user) {
             return res.status(404).json({
-                success: false, message: 'User not found.'
+                success: false,
+                message: 'User not found.'
             });
         }
 
-        // check if lesson exists
-        const lesson = await dbGet(`SELECT id FROM lessons WHERE id = ? AND is_published = 1`, [lessonId]);
+        const lesson = await dbGet(
+            `SELECT id FROM lessons WHERE id = ? AND is_published = 1`,
+            [lessonId]
+        );
+
         if (!lesson) {
             return res.status(404).json({
-                success: false, message: 'Lesson not found.'
+                success: false,
+                message: 'Lesson not found.'
             });
         }
 
-        // update progress
         const result = await dbRun(
-            `UPDATE user_progress 
-             SET completed = 1, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            `UPDATE user_progress
+             SET status = 'completed',
+                 completed_at = CURRENT_TIMESTAMP,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE user_id = ? AND lesson_id = ?`,
             [id, lessonId]
         );
 
         if (result.changes === 0) {
             return res.status(404).json({
-                success: false, message: 'Progress entry not found.'
+                success: false,
+                message: 'Progress entry not found.'
             });
         }
 
-        // update streak
+        const progress = await updateParentStatusesAfterLessonCompletion(id, lessonId);
+
         await updateUserStreak(id);
 
         res.json({
-            success: true, message: 'Lesson marked as completed'
+            success: true,
+            message: 'Lesson marked as completed',
+            progress: {
+                lessonCompleted: true,
+                ...progress
+            }
         });
 
     } catch (error) {
         console.error('Complete Lesson Error:', error);
         res.status(500).json({
-            success: false, message: 'Internal server error.'
+            success: false,
+            message: 'Internal server error.'
         });
     }
+};
+
+const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
+    const lesson = await dbGet(
+        `SELECT l.module_id, m.course_id
+         FROM lessons l
+         JOIN modules m ON m.id = l.module_id
+         WHERE l.id = ?`,
+        [lessonId]
+    );
+
+    if (!lesson) {
+        return {
+            moduleCompleted: false,
+            courseCompleted: false
+        };
+    }
+
+    const moduleProgress = await dbGet(
+        `SELECT COUNT(*) AS total_lessons,
+                SUM(CASE WHEN up.status = 'completed' THEN 1 ELSE 0 END) AS completed_lessons
+         FROM lessons l
+         LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ?
+         WHERE l.module_id = ?
+           AND l.is_published = 1`,
+        [userId, lesson.module_id]
+    );
+
+    const moduleCompleted =
+        moduleProgress.total_lessons > 0 &&
+        moduleProgress.total_lessons === moduleProgress.completed_lessons;
+
+    if (moduleCompleted) {
+        await dbRun(
+            `INSERT INTO user_module_status (user_id, module_id, status, created_at, updated_at)
+             VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT(user_id, module_id) DO UPDATE SET
+                 status = 'completed',
+                 updated_at = CURRENT_TIMESTAMP`,
+            [userId, lesson.module_id]
+        );
+    }
+
+    const courseProgress = await dbGet(
+        `SELECT COUNT(*) AS total_modules,
+                SUM(CASE WHEN ums.status = 'completed' THEN 1 ELSE 0 END) AS completed_modules
+         FROM modules m
+         LEFT JOIN user_module_status ums ON ums.module_id = m.id AND ums.user_id = ?
+         WHERE m.course_id = ?`,
+        [userId, lesson.course_id]
+    );
+
+    const courseCompleted =
+        courseProgress.total_modules > 0 &&
+        courseProgress.total_modules === courseProgress.completed_modules;
+
+    if (courseCompleted) {
+        await dbRun(
+            `INSERT INTO user_course_status (user_id, course_id, status, created_at, updated_at)
+             VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT(user_id, course_id) DO UPDATE SET
+                 status = 'completed',
+                 updated_at = CURRENT_TIMESTAMP`,
+            [userId, lesson.course_id]
+        );
+    }
+
+    return {
+        moduleCompleted,
+        courseCompleted
+    };
 };
 
 export const openLesson = async (req, res) => {
@@ -170,25 +287,29 @@ export const openLesson = async (req, res) => {
     try {
         const result = await dbRun(
             `UPDATE user_progress 
-             SET last_opened_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+             SET last_opened_at = CURRENT_TIMESTAMP,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE user_id = ? AND lesson_id = ?`,
             [id, lessonId]
         );
 
         if (result.changes === 0) {
             return res.status(404).json({
-                success: false, message: 'Progress entry not found.'
+                success: false,
+                message: 'Progress entry not found.'
             });
         }
 
         res.json({
-            success: true, message: 'Lesson opened timestamp updated'
+            success: true,
+            message: 'Lesson opened timestamp updated'
         });
 
     } catch (error) {
         console.error('Open Lesson Error:', error);
         res.status(500).json({
-            success: false, message: 'Internal server error.'
+            success: false,
+            message: 'Internal server error.'
         });
     }
 };
@@ -217,10 +338,8 @@ const updateUserStreak = async (userId) => {
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
     if (lastActive === yesterdayStr) {
-        // Consecutive day, increase streak
         newCurrentStreak = streak.current_streak + 1;
     } else {
-        // Gap in days, reset streak
         newCurrentStreak = 1;
     }
 
