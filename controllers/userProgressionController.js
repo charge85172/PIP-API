@@ -46,7 +46,7 @@ export const initializeUserProgress = async (userId) => {
     const lessons = await dbAll(
         `SELECT l.id
          FROM lessons l
-         JOIN modules m ON m.id = l.module_id
+                  JOIN modules m ON m.id = l.module_id
          WHERE l.is_published = 1
          ORDER BY m.order_index, l.order_index`
     );
@@ -55,7 +55,7 @@ export const initializeUserProgress = async (userId) => {
         await dbRun(
             `INSERT INTO user_progress (user_id, lesson_id, status, completed_at, last_opened_at)
              VALUES (?, ?, 'open', NULL, CURRENT_TIMESTAMP)
-             ON CONFLICT(user_id, lesson_id) DO NOTHING`,
+                 ON CONFLICT(user_id, lesson_id) DO NOTHING`,
             [userId, lesson.id]
         );
     }
@@ -64,7 +64,7 @@ export const initializeUserProgress = async (userId) => {
     const modules = await dbAll(
         `SELECT DISTINCT m.id
          FROM modules m
-         JOIN lessons l ON l.module_id = m.id
+                  JOIN lessons l ON l.module_id = m.id
          WHERE l.is_published = 1`
     );
 
@@ -72,7 +72,7 @@ export const initializeUserProgress = async (userId) => {
         await dbRun(
             `INSERT INTO user_module_status (user_id, module_id, status)
              VALUES (?, ?, 'open')
-             ON CONFLICT(user_id, module_id) DO NOTHING`,
+                 ON CONFLICT(user_id, module_id) DO NOTHING`,
             [userId, module.id]
         );
     }
@@ -81,8 +81,8 @@ export const initializeUserProgress = async (userId) => {
     const courses = await dbAll(
         `SELECT DISTINCT c.id
          FROM courses c
-         JOIN modules m ON m.course_id = c.id
-         JOIN lessons l ON l.module_id = m.id
+                  JOIN modules m ON m.course_id = c.id
+                  JOIN lessons l ON l.module_id = m.id
          WHERE c.is_published = 1
            AND l.is_published = 1`
     );
@@ -91,7 +91,7 @@ export const initializeUserProgress = async (userId) => {
         await dbRun(
             `INSERT INTO user_course_status (user_id, course_id, status)
              VALUES (?, ?, 'open')
-             ON CONFLICT(user_id, course_id) DO NOTHING`,
+                 ON CONFLICT(user_id, course_id) DO NOTHING`,
             [userId, course.id]
         );
     }
@@ -100,7 +100,7 @@ export const initializeUserProgress = async (userId) => {
     await dbRun(
         `INSERT INTO user_streaks (user_id, current_streak, highest_streak, last_active_date)
          VALUES (?, 0, 0, DATE('now'))
-         ON CONFLICT(user_id) DO NOTHING`,
+             ON CONFLICT(user_id) DO NOTHING`,
         [userId]
     );
 
@@ -141,7 +141,7 @@ export const getUserProgress = async (req, res) => {
         const rewards = await dbAll(
             `SELECT r.title, r.description, ur.unlocked_at
              FROM user_rewards ur
-             JOIN rewards r ON r.id = ur.reward_id
+                      JOIN rewards r ON r.id = ur.reward_id
              WHERE ur.user_id = ?`,
             [id]
         );
@@ -167,29 +167,25 @@ export const getUserProgress = async (req, res) => {
 
 /**
  * PUT /api/users/:id/progress/lesson/:lessonId
- * Marks a lesson as completed and updates parent module/course statuses.
- */
-/**
- * PUT /api/users/:id/progress/lesson/:lessonId
- * Markeert een les als voltooid, update parent statuses, streaks en kent XP toe.
+ * Marks a lesson as completed, updates parent statuses, streaks, and awards XP.
  */
 export const completeLesson = async (req, res) => {
     const { id, lessonId } = req.params;
 
     try {
-        // 1. Validatie: Bestaat de gebruiker?
+        // 1. Validation: Does the user exist?
         const user = await dbGet(`SELECT id FROM users WHERE id = ?`, [id]);
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Gebruiker niet gevonden.' });
+            return res.status(404).json({ success: false, message: 'User not found.' });
         }
 
-        // 2. Validatie: Bestaat de les en is deze gepubliceerd?
+        // 2. Validation: Does the lesson exist and is it published?
         const lesson = await dbGet(`SELECT id FROM lessons WHERE id = ? AND is_published = 1`, [lessonId]);
         if (!lesson) {
-            return res.status(404).json({ success: false, message: 'Les niet gevonden of niet gepubliceerd.' });
+            return res.status(404).json({ success: false, message: 'Lesson not found or not published.' });
         }
 
-        // 3. Update de voortgang naar 'completed'
+        // 3. Update progress to 'completed'
         const result = await dbRun(
             `UPDATE user_progress
              SET status = 'completed',
@@ -200,29 +196,29 @@ export const completeLesson = async (req, res) => {
         );
 
         if (result.changes === 0) {
-            return res.status(404).json({ success: false, message: 'Geen voortgangsrecord gevonden voor deze combinatie.' });
+            return res.status(404).json({ success: false, message: 'No progress record found for this combination.' });
         }
 
-        // 4. Update de status van de bovenliggende module en cursus
+        // 4. Update the status of the parent module and course
         const parentStatus = await updateParentStatusesAfterLessonCompletion(id, lessonId);
 
-        // 5. Update de streak van de gebruiker
+        // 5. Update the user's streak
         await updateUserStreak(id);
 
-        // 6. Koppel XP aan de voltooiing (User Story #25)
-        // We geven hier 20 XP voor het afronden van een hele les
+        // 6. Award XP for completion (User Story #25)
+        // We award 20 XP for completing an entire lesson here
         let xpResult = null;
         try {
             xpResult = await awardXP(id, 'lesson_completion', lessonId, 20);
         } catch (xpError) {
-            console.error('Fout bij toekennen XP tijdens lesvoltooiing:', xpError);
-            // We laten de request niet falen als alleen de XP-toekenning mislukt
+            console.error('Error awarding XP during lesson completion:', xpError);
+            // We do not let the request fail if only the XP award fails
         }
 
-        // 7. Stuur succesvolle response terug inclusief XP data voor de frontend
+        // 7. Send successful response including XP data for the frontend
         res.json({
             success: true,
-            message: 'Les succesvol gemarkeerd als voltooid',
+            message: 'Lesson successfully marked as completed',
             data: {
                 lessonCompleted: true,
                 moduleCompleted: parentStatus.moduleCompleted,
@@ -238,7 +234,7 @@ export const completeLesson = async (req, res) => {
         console.error('Complete Lesson Error:', error);
         res.status(500).json({
             success: false,
-            message: 'Interne serverfout bij het voltooien van de les.'
+            message: 'Internal server error when completing the lesson.'
         });
     }
 };
@@ -250,7 +246,7 @@ const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
     const lesson = await dbGet(
         `SELECT l.module_id, m.course_id
          FROM lessons l
-         JOIN modules m ON m.id = l.module_id
+                  JOIN modules m ON m.id = l.module_id
          WHERE l.id = ?`,
         [lessonId]
     );
@@ -262,7 +258,7 @@ const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
         `SELECT COUNT(*) AS total_lessons,
                 SUM(CASE WHEN up.status = 'completed' THEN 1 ELSE 0 END) AS completed_lessons
          FROM lessons l
-         LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ?
+                  LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ?
          WHERE l.module_id = ? AND l.is_published = 1`,
         [userId, lesson.module_id]
     );
@@ -274,7 +270,7 @@ const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
         await dbRun(
             `INSERT INTO user_module_status (user_id, module_id, status, created_at, updated_at)
              VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT(module_id, user_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP`,
+                 ON CONFLICT(module_id, user_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP`,
             [userId, lesson.module_id]
         );
     }
@@ -284,7 +280,7 @@ const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
         `SELECT COUNT(*) AS total_modules,
                 SUM(CASE WHEN ums.status = 'completed' THEN 1 ELSE 0 END) AS completed_modules
          FROM modules m
-         LEFT JOIN user_module_status ums ON ums.module_id = m.id AND ums.user_id = ?
+                  LEFT JOIN user_module_status ums ON ums.module_id = m.id AND ums.user_id = ?
          WHERE m.course_id = ?`,
         [userId, lesson.course_id]
     );
@@ -296,7 +292,7 @@ const updateParentStatusesAfterLessonCompletion = async (userId, lessonId) => {
         await dbRun(
             `INSERT INTO user_course_status (user_id, course_id, status, created_at, updated_at)
              VALUES (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT(course_id, user_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP`,
+                 ON CONFLICT(course_id, user_id) DO UPDATE SET status = 'completed', updated_at = CURRENT_TIMESTAMP`,
             [userId, lesson.course_id]
         );
     }
@@ -313,7 +309,7 @@ export const openLesson = async (req, res) => {
 
     try {
         const result = await dbRun(
-            `UPDATE user_progress 
+            `UPDATE user_progress
              SET last_opened_at = CURRENT_TIMESTAMP,
                  updated_at = CURRENT_TIMESTAMP
              WHERE user_id = ? AND lesson_id = ?`,

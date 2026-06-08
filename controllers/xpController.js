@@ -11,11 +11,11 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
 });
 
 /**
- * Logica om XP toe te kennen en levels te berekenen
+ * Logic to award XP and calculate levels
  */
 export const awardXP = async (userId, activityType, activityId, amount = 10) => {
     try {
-        // 1. Probeer transactie op te slaan (stopt hier bij duplicaat door UNIQUE constraint)
+        // 1. Try to save the transaction (UNIQUE constraint prevents duplicate awards)
         try {
             await dbRun(
                 `INSERT INTO xp_transactions (user_id, activity_type, activity_id, xp_amount)
@@ -24,21 +24,21 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
             );
         } catch (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
-                return { success: false, message: 'XP is al toegekend voor deze activiteit.' };
+                return { success: false, message: 'XP has already been awarded for this activity.' };
             }
             throw err;
         }
 
-        // 2. Haal huidige XP op van de gebruiker
+        // 2. Retrieve current XP from the user
         const user = await dbGet(`SELECT experience, current_level_id FROM users WHERE id = ?`, [userId]);
-        if (!user) throw new Error('Gebruiker niet gevonden');
+        if (!user) throw new Error('User not found');
 
         let newTotalXP = (user.experience || 0) + amount;
 
-        // 3. Level berekening: 100 XP per level (100xp = lvl 2, 200xp = lvl 3, etc.)
+        // 3. Level calculation: 100 XP per level (100xp = lvl 2, 200xp = lvl 3, etc.)
         let newLevel = Math.floor(newTotalXP / 100) + 1;
 
-        // 4. Update de gebruiker
+        // 4. Update the user
         await dbRun(
             `UPDATE users SET experience = ?, current_level_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
             [newTotalXP, newLevel, userId]
@@ -59,14 +59,14 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
 
 /**
  * POST /api/progress/xp
- * Endpoint voor de frontend (bijv. na correct antwoord op een vraag)
+ * Endpoint for the frontend (e.g., after a correct answer to a question)
  */
 export const handlePostXP = async (req, res) => {
     const { userId, activityType, activityId } = req.body;
     const DEFAULT_XP = 10;
 
     if (!userId || !activityType || !activityId) {
-        return res.status(400).json({ success: false, message: 'Ontbrekende velden in request body.' });
+        return res.status(400).json({ success: false, message: 'Missing fields in request body.' });
     }
 
     try {
@@ -76,6 +76,6 @@ export const handlePostXP = async (req, res) => {
         }
         res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Interne serverfout bij toekennen XP.' });
+        res.status(500).json({ success: false, message: 'Internal server error when awarding XP.' });
     }
 };
