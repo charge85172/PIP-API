@@ -1,5 +1,6 @@
 import db from '../db.js';
 import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
 import { initializeUserProgress } from './userProgressionController.js';
 
 /**
@@ -138,7 +139,6 @@ export const loginUser = async (req, res) => {
     }
 
     try {
-        // Updated column name to 'password'
         const user = await dbGet(
             `SELECT id, name, email, password, digital_skill_level, experience, current_level_id, on_boarding
              FROM users
@@ -166,11 +166,23 @@ export const loginUser = async (req, res) => {
         // Remove password before sending user data back
         const { password: _, ...userWithoutPassword } = user;
 
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: process.env.JWT_EXPIRES_IN || "1y",
+            }
+        );
+
         res.json({
             success: true,
-            message: 'Login successful',
+            message: "Login successful",
             data: {
-                user: userWithoutPassword
+                user: userWithoutPassword,
+                token: token
             }
         });
 
@@ -211,6 +223,13 @@ export const getAllUsers = async (req, res) => {
  */
 export const getUserById = async (req, res) => {
     const { id } = req.params;
+
+    if (Number(id) !== req.user.id) {
+        return res.status(403).json({
+            success: false,
+            message: "Access denied"
+        });
+    }
 
     try {
         const user = await dbGet(
