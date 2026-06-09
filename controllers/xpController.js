@@ -1,15 +1,20 @@
+// C:/Users/ashfa/Development/TLE4/PIP-API/controllers/xpController.js
+
 import db from '../db.js';
 
+// Helper to wrap db.get in a Promise
 const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
     db.get(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
 });
 
+// Helper to wrap db.run in a Promise
 const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
     db.run(sql, params, function(err) {
         (err ? reject(err) : resolve({ lastID: this.lastID, changes: this.changes }));
     });
 });
 
+// Helper to wrap db.all in a Promise
 const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
 });
@@ -34,13 +39,18 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
         }
 
         // 2. Retrieve current XP and level from the user
-        const user = await dbGet(`SELECT experience, current_level_id FROM users WHERE id = ?`, [userId]);
+        const user = await dbGet(`SELECT experience, current_level_id, on_boarding FROM users WHERE id = ?`, [userId]);
         if (!user) throw new Error('User not found');
+
+        // Prevent XP gain if not onboarded (user must be at least level 1 to earn XP)
+        if (user.on_boarding === 0) {
+            return { success: false, message: 'Please complete onboarding first to start earning XP.' };
+        }
 
         let newTotalXP = (user.experience || 0) + amount;
 
         // 3. Level calculation: 100 XP per level (100xp = lvl 2, 200xp = lvl 3, etc.)
-        // Levels start from 1, so 0-99 XP is Level 1, 100-199 XP is Level 2.
+        // Levels start from 1 after onboarding, so 0-99 XP is Level 1, 100-199 XP is Level 2.
         let newLevel = Math.floor(newTotalXP / 100) + 1;
 
         const levelUpOccurred = newLevel > user.current_level_id;
@@ -54,9 +64,9 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
 
         // 5. If a level-up occurred, check for and unlock new rewards
         if (levelUpOccurred) {
-            // Fetch all rewards associated with the new level
+            // Fetch all rewards associated with the new level (NU INCLUSIEF image_url)
             const rewardsForNewLevel = await dbAll(
-                `SELECT id, title, description FROM rewards WHERE level_id = ?`,
+                `SELECT id, title, description, image_url FROM rewards WHERE level_id = ?`,
                 [newLevel]
             );
 
@@ -70,7 +80,8 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
                     unlockedRewards.push({
                         id: reward.id,
                         title: reward.title,
-                        description: reward.description
+                        description: reward.description,
+                        image_url: reward.image_url // INCLUSIEF image_url
                     });
                 } catch (rewardErr) {
                     // If the UNIQUE constraint fails, the reward was already unlocked (e.g., if a user
@@ -102,20 +113,22 @@ export const awardXP = async (userId, activityType, activityId, amount = 10) => 
  * Endpoint for the frontend (e.g., after a correct answer to a question)
  */
 export const handlePostXP = async (req, res) => {
-    const { userId, activityType, activityId } = req.body;
-    const DEFAULT_XP = 10;
+    const { userId, activityType, activityId, xpAmount } = req.body; // Added xpAmount for flexibility
+    const amountToAward = xpAmount || 10; // Use provided amount or default to 10
 
     if (!userId || !activityType || !activityId) {
         return res.status(400).json({ success: false, message: 'Missing fields in request body.' });
     }
 
     try {
-        const result = await awardXP(userId, activityType, activityId, DEFAULT_XP);
+        const result = await awardXP(userId, activityType, activityId, amountToAward);
         if (!result.success) {
-            return res.status(409).json(result);
+            // If XP awarding failed (e.g., due to onboarding check or duplicate activity)
+            return res.status(409).json(result); // Use 409 Conflict for specific business logic failures
         }
         res.status(200).json(result);
     } catch (error) {
+        console.error('handlePostXP Error:', error); // Log the error for debugging
         res.status(500).json({ success: false, message: 'Internal server error when awarding XP.' });
     }
 };
