@@ -50,16 +50,17 @@ db.serialize(() => {
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lesson_id INTEGER,
-        question_text TEXT NOT NULL,
-        question_type TEXT,
-        explanation TEXT,
-        order_index INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (lesson_id) REFERENCES lessons(id)
-    )`);
+                                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                                     lesson_id INTEGER,
+                                                     question_text TEXT NOT NULL,
+                                                     question_type TEXT,
+                                                     explanation TEXT,
+                                                     image_url TEXT, -- VOEG DEZE REGEL TOE
+                                                     order_index INTEGER,
+                                                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                                     FOREIGN KEY (lesson_id) REFERENCES lessons(id)
+        )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS answers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
