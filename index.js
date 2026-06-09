@@ -34,6 +34,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/hamsterverse', hamsterverseRoutes); // Add this line
 app.use('/api/dashboard', dashboardRoutes);
+app.use(express.static("public"));
 
 
 // Health check endpoint for server
