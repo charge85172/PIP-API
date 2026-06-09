@@ -1,5 +1,5 @@
 import db from '../db.js';
-import {awardXP} from "./xpController.js";
+import { awardXP } from "./xpController.js"; // Ensure this import is present
 
 /**
  * Helper to wrap db.get in a Promise for single-row queries
@@ -138,6 +138,7 @@ export const getUserProgress = async (req, res) => {
             [id]
         );
 
+        // Fetch user's unlocked rewards
         const rewards = await dbAll(
             `SELECT r.title, r.description, ur.unlocked_at
              FROM user_rewards ur
@@ -226,7 +227,8 @@ export const completeLesson = async (req, res) => {
                 xpAwarded: xpResult?.success ? xpResult.xpAdded : 0,
                 totalXP: xpResult?.success ? xpResult.totalXP : null,
                 level: xpResult?.success ? xpResult.level : null,
-                levelUp: xpResult?.levelUp || false
+                levelUp: xpResult?.levelUp || false,
+                unlockedRewards: xpResult?.unlockedRewards || [] // Include unlocked rewards
             }
         });
 
