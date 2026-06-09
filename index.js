@@ -6,7 +6,7 @@ import courseRoutes from './routes/courseRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
-
+import hamsterverseRoutes from './routes/hamsterverseRoutes.js';
 
 const app = express();
 
@@ -30,6 +30,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/progress', progressRoutes);
+app.use('/api/hamsterverse', hamsterverseRoutes); // Add this line
 app.use('/api/dashboard', dashboardRoutes);
 
 
