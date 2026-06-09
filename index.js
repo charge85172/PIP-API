@@ -5,6 +5,8 @@ import userRoutes from './routes/userRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
+
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/rewards', rewardRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
 
 // Health check endpoint for server
 app.get('/health', (req, res) => {
