@@ -125,3 +125,76 @@ export const completeLessonAttempt = (req, res) => {
         );
     });
 };
+
+export const getLessonResult = (req, res) => {
+    const { lessonId, attemptId } = req.params;
+
+    const attemptSql = `
+        SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at
+        FROM lesson_attempts
+        WHERE id = ?
+          AND lesson_id = ?
+    `;
+
+    db.get(attemptSql, [attemptId, lessonId], (err, attempt) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+
+        if (!attempt) {
+            return res.status(404).json({ error: 'Lesson attempt not found for this lesson' });
+        }
+
+        const resultSql = `
+            SELECT q.id AS question_id,
+                   q.question_text,
+                   q.tip AS question_tip,
+                   q.order_index,
+                   laa.is_correct,
+                   given_answer.id AS given_answer_id,
+                   given_answer.answer_text AS given_answer_text,
+                   correct_answer.id AS correct_answer_id,
+                   correct_answer.answer_text AS correct_answer_text
+            FROM questions q
+            LEFT JOIN lesson_attempt_answers laa ON laa.question_id = q.id AND laa.lesson_attempt_id = ?
+            LEFT JOIN answers given_answer ON given_answer.id = laa.answer_id
+            LEFT JOIN answers correct_answer ON correct_answer.question_id = q.id AND correct_answer.is_correct = 1
+            WHERE q.lesson_id = ? ORDER BY q.order_index `;
+
+        db.all(resultSql, [attemptId, lessonId], (err, rows) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+
+            const questions = rows.map(row => {
+                const question = {
+                    questionId: row.question_id,
+                    questionText: row.question_text,
+                    tip: row.question_tip,
+                    isCorrect: Boolean(row.is_correct)
+                };
+
+                if (row.is_correct) {
+                    question.correctAnswer = {
+                        answerId: row.correct_answer_id,
+                        answerText: row.correct_answer_text
+                    };
+                } else {
+                    question.givenAnswer = {
+                        answerId: row.given_answer_id,
+                        answerText: row.given_answer_text
+                    };
+
+                    question.correctAnswer = {
+                        answerId: row.correct_answer_id,
+                        answerText: row.correct_answer_text
+                    };
+                }
+
+                return question;
+            });
+
+            res.json({ attemptId: Number(attemptId), lessonId: Number(lessonId), userId: attempt.user_id, score: attempt.score, totalQuestions: attempt.total_questions, passed: Boolean(attempt.passed), questions });
+        });
+    });
+};
