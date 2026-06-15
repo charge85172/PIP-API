@@ -126,6 +126,28 @@ export const completeLessonAttempt = (req, res) => {
     });
 };
 
+export const getLessonAttempts = (req, res) => {
+    const { lessonId, userId } = req.params;
+
+    const sql = ` SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts 
+                         WHERE lesson_id = ? AND user_id = ? ORDER BY score DESC, created_at DESC `;
+
+    db.all(sql, [lessonId, userId], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+
+        res.json({
+            attemptCount: rows.length,
+            attempts: rows.map(row => ({
+                ...row,
+                passed: Boolean(row.passed)
+            }))
+        });
+    });
+};
+
+
 export const getLessonResult = (req, res) => {
     const { lessonId, attemptId } = req.params;
 
