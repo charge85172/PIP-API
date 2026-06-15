@@ -32,7 +32,7 @@ app.use('/api/rewards', rewardRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/progress', progressRoutes);
-app.use('/api/hamsterverse', hamsterverseRoutes); // Add this line
+app.use('/api/hamsterverse', hamsterverseRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use(express.static("public"));
 
