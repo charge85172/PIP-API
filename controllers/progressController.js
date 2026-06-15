@@ -1,8 +1,8 @@
-// C:/Users/ashfa/Development/TLE4/PIP-API/controllers/progressController.js
 import db from '../db.js';
+import { getRequestLanguage } from '../utils/languageHelper.js';
+import { translateContent } from '../utils/translator.js';
 
 const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
-    // Fetch lesson and course context
     const contextSql = `
         SELECT l.id as lesson_id, m.course_id
         FROM lessons l
@@ -13,7 +13,6 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
     db.get(contextSql, [lessonId], (err, context) => {
         if (err || !context) return callback(err || new Error('Context not found'));
 
-        // 1. Update user_progress table
         const progressSql = `
             INSERT INTO user_progress (user_id, lesson_id, status, completed, completed_at, updated_at)
             VALUES (?, ?, 'completed', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -27,7 +26,6 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
         db.run(progressSql, [userId, lessonId], function(err) {
             if (err) return callback(err);
 
-            // 2. Check if all lessons in the course are completed to update user_course_status
             const courseCheckSql = `
                 SELECT
                     (SELECT COUNT(*) FROM lessons l2 JOIN modules m2 ON l2.module_id = m2.id WHERE m2.course_id = ?) as total_lessons,
@@ -44,7 +42,7 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
                     const courseStatusSql = `
                         INSERT INTO user_course_status (user_id, course_id, status)
                         VALUES (?, ?, 'completed')
-                        ON CONFLICT(user_id, course_id) DO UPDATE SET status = 'completed'
+                            ON CONFLICT(user_id, course_id) DO UPDATE SET status = 'completed'
                     `;
                     db.run(courseStatusSql, [userId, context.course_id], (err) => {
                         callback(err, { lessonCompleted: true, courseCompleted: true });
@@ -129,8 +127,8 @@ export const completeLessonAttempt = (req, res) => {
 export const getLessonAttempts = (req, res) => {
     const { lessonId, userId } = req.params;
 
-    const sql = ` SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts 
-                         WHERE lesson_id = ? AND user_id = ? ORDER BY score DESC, created_at DESC `;
+    const sql = ` SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at FROM lesson_attempts
+                  WHERE lesson_id = ? AND user_id = ? ORDER BY score DESC, created_at DESC `;
 
     db.all(sql, [lessonId, userId], (err, rows) => {
         if (err) {
@@ -150,6 +148,7 @@ export const getLessonAttempts = (req, res) => {
 
 export const getLessonResult = (req, res) => {
     const { lessonId, attemptId } = req.params;
+    const lang = getRequestLanguage(req);
 
     const attemptSql = `
         SELECT id, user_id, lesson_id, score, total_questions, passed, started_at, completed_at, created_at
@@ -159,13 +158,8 @@ export const getLessonResult = (req, res) => {
     `;
 
     db.get(attemptSql, [attemptId, lessonId], (err, attempt) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-
-        if (!attempt) {
-            return res.status(404).json({ error: 'Lesson attempt not found for this lesson' });
-        }
+        if (err) return res.status(500).json({ error: err.message });
+        if (!attempt) return res.status(404).json({ error: 'Lesson attempt not found' });
 
         const resultSql = `
             SELECT q.id AS question_id,
@@ -178,17 +172,25 @@ export const getLessonResult = (req, res) => {
                    correct_answer.id AS correct_answer_id,
                    correct_answer.answer_text AS correct_answer_text
             FROM questions q
-            LEFT JOIN lesson_attempt_answers laa ON laa.question_id = q.id AND laa.lesson_attempt_id = ?
-            LEFT JOIN answers given_answer ON given_answer.id = laa.answer_id
-            LEFT JOIN answers correct_answer ON correct_answer.question_id = q.id AND correct_answer.is_correct = 1
+                     LEFT JOIN lesson_attempt_answers laa ON laa.question_id = q.id AND laa.lesson_attempt_id = ?
+                     LEFT JOIN answers given_answer ON given_answer.id = laa.answer_id
+                     LEFT JOIN answers correct_answer ON correct_answer.question_id = q.id AND correct_answer.is_correct = 1
             WHERE q.lesson_id = ? ORDER BY q.order_index `;
 
         db.all(resultSql, [attemptId, lessonId], (err, rows) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
+            if (err) return res.status(500).json({ error: err.message });
 
-            const questions = rows.map(row => {
+            // eerst rijen vertalen. Omdat de translator specifieke keys wil,
+            // heb ik de aliassen even gemapt naar de standaard namen
+            const rowsToTranslate = rows.map(row => ({
+                ...row,
+                // voeg deze keys tijdelijk toe zodat de 'wasmachine' ze herkent
+                answer_text: row.correct_answer_text,
+            }));
+
+            const translatedRows = translateContent(rowsToTranslate, lang);
+
+            const questions = translatedRows.map(row => {
                 const question = {
                     questionId: row.question_id,
                     questionText: row.question_text,
@@ -196,27 +198,30 @@ export const getLessonResult = (req, res) => {
                     isCorrect: Boolean(row.is_correct)
                 };
 
-                if (row.is_correct) {
-                    question.correctAnswer = {
-                        answerId: row.correct_answer_id,
-                        answerText: row.correct_answer_text
-                    };
-                } else {
+                question.correctAnswer = {
+                    answerId: row.correct_answer_id,
+                    answerText: row.answer_text
+                };
+
+                if (!row.is_correct) {
                     question.givenAnswer = {
                         answerId: row.given_answer_id,
                         answerText: row.given_answer_text
-                    };
-
-                    question.correctAnswer = {
-                        answerId: row.correct_answer_id,
-                        answerText: row.correct_answer_text
                     };
                 }
 
                 return question;
             });
 
-            res.json({ attemptId: Number(attemptId), lessonId: Number(lessonId), userId: attempt.user_id, score: attempt.score, totalQuestions: attempt.total_questions, passed: Boolean(attempt.passed), questions });
+            res.json({
+                attemptId: Number(attemptId),
+                lessonId: Number(lessonId),
+                userId: attempt.user_id,
+                score: attempt.score,
+                totalQuestions: attempt.total_questions,
+                passed: Boolean(attempt.passed),
+                questions
+            });
         });
     });
 };
