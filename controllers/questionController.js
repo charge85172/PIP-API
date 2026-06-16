@@ -21,15 +21,21 @@ export const getQuestions = (req, res) => {
 export const getQuestion = (req, res) => {
     const { questionId } = req.params;
     const lang = getRequestLanguage(req);
+
     const sql = 'SELECT * FROM questions WHERE id = ?';
-    db.get(sql, [questionId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (!row) {
-            return res.status(404).json({ error: 'Question not found' });
-        }
-        res.json(translateContent(row, lang));
+    db.get(sql, [questionId], (err, question) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!question) return res.status(404).json({ error: 'Question not found' });
+
+        const answersSql = `SELECT id, question_id, answer_text, is_correct 
+                            FROM answers WHERE question_id = ? ORDER BY id`;
+        db.all(answersSql, [questionId], (err, answers) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const translatedQuestion = translateContent(question, lang);
+            translatedQuestion.answers = translateContent(answers, lang);
+            res.json(translatedQuestion);
+        });
     });
 };
 
