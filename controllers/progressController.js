@@ -180,11 +180,8 @@ export const getLessonResult = (req, res) => {
         db.all(resultSql, [attemptId, lessonId], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // eerst rijen vertalen. Omdat de translator specifieke keys wil,
-            // heb ik de aliassen even gemapt naar de standaard namen
             const rowsToTranslate = rows.map(row => ({
                 ...row,
-                // voeg deze keys tijdelijk toe zodat de 'wasmachine' ze herkent
                 answer_text: row.correct_answer_text,
             }));
 
@@ -222,6 +219,24 @@ export const getLessonResult = (req, res) => {
                 passed: Boolean(attempt.passed),
                 questions
             });
+        });
+    });
+};
+
+export const resetLessonCompletion = (req, res) => {
+    const { userId, lessonId } = req.params;
+
+    const sql = `DELETE FROM user_progress WHERE user_id = ? AND lesson_id = ?`;
+
+    db.run(sql, [userId, lessonId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({
+            message: 'Lesson completion reset successful',
+            userId: Number(userId),
+            lessonId: Number(lessonId),
+            deletedRows: this.changes
         });
     });
 };
