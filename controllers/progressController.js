@@ -14,11 +14,12 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
         if (err || !context) return callback(err || new Error('Context not found'));
 
         const progressSql = `
-            INSERT INTO user_progress (user_id, lesson_id, status, completed, completed_at, updated_at)
-            VALUES (?, ?, 'completed', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO user_progress
+                (user_id, lesson_id, status, completed_at, updated_at)
+            VALUES
+                (?, ?, 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(user_id, lesson_id) DO UPDATE SET
                 status = 'completed',
-                                                       completed = 1,
                                                        completed_at = COALESCE(user_progress.completed_at, CURRENT_TIMESTAMP),
                                                        updated_at = CURRENT_TIMESTAMP
         `;
@@ -28,33 +29,55 @@ const updateUserProgressAfterCompletedLesson = (userId, lessonId, callback) => {
 
             const courseCheckSql = `
                 SELECT
-                    (SELECT COUNT(*) FROM lessons l2 JOIN modules m2 ON l2.module_id = m2.id WHERE m2.course_id = ?) as total_lessons,
-                    (SELECT COUNT(*) FROM user_progress up JOIN lessons l3 ON up.lesson_id = l3.id JOIN modules m3 ON l3.module_id = m3.id
-                     WHERE m3.course_id = ? AND up.user_id = ? AND up.completed = 1) as completed_lessons
+                    (
+                        SELECT COUNT(*)
+                        FROM lessons l2
+                                 JOIN modules m2 ON l2.module_id = m2.id
+                        WHERE m2.course_id = ?
+                    ) as total_lessons,
+                    (
+                        SELECT COUNT(*)
+                        FROM user_progress up
+                                 JOIN lessons l3 ON up.lesson_id = l3.id
+                                 JOIN modules m3 ON l3.module_id = m3.id
+                        WHERE m3.course_id = ?
+                          AND up.user_id = ?
+                          AND up.status = 'completed'
+                          AND up.completed_at IS NOT NULL
+                    ) as completed_lessons
             `;
 
             db.get(courseCheckSql, [context.course_id, context.course_id, userId], (err, row) => {
                 if (err) return callback(err);
 
-                const courseCompleted = row.total_lessons > 0 && row.total_lessons === row.completed_lessons;
+                const courseCompleted =
+                    row.total_lessons > 0 &&
+                    row.total_lessons === row.completed_lessons;
 
                 if (courseCompleted) {
                     const courseStatusSql = `
                         INSERT INTO user_course_status (user_id, course_id, status)
                         VALUES (?, ?, 'completed')
-                            ON CONFLICT(user_id, course_id) DO UPDATE SET status = 'completed'
+                            ON CONFLICT(user_id, course_id) 
+                        DO UPDATE SET status = 'completed'
                     `;
+
                     db.run(courseStatusSql, [userId, context.course_id], (err) => {
-                        callback(err, { lessonCompleted: true, courseCompleted: true });
+                        callback(err, {
+                            lessonCompleted: true,
+                            courseCompleted: true
+                        });
                     });
                 } else {
-                    callback(null, { lessonCompleted: true, courseCompleted: false });
+                    callback(null, {
+                        lessonCompleted: true,
+                        courseCompleted: false
+                    });
                 }
             });
         });
     });
 };
-
 export const startLessonAttempt = (req, res) => {
     const { lessonId } = req.params;
     const { userId } = req.body;
@@ -90,6 +113,59 @@ export const submitAttemptAnswer = (req, res) => {
     });
 };
 
+const updateUserStreak = (userId, callback) => {
+    db.get(
+        `SELECT current_streak, highest_streak, last_active_date
+         FROM user_streaks
+         WHERE user_id = ?`,
+        [userId],
+        (err, streak) => {
+            if (err) return callback(err);
+
+            if (!streak) {
+                return db.run(
+                    `INSERT INTO user_streaks 
+                     (user_id, current_streak, highest_streak, last_active_date)
+                     VALUES (?, 1, 1, DATE('now'))`,
+                    [userId],
+                    callback
+                );
+            }
+
+            const today = new Date().toISOString().split('T')[0];
+
+            if (streak.last_active_date === today) {
+                return callback(null);
+            }
+
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            let newCurrentStreak;
+
+            if (!streak.last_active_date) {
+                newCurrentStreak = 1;
+            } else if (streak.last_active_date === yesterdayStr) {
+                newCurrentStreak = streak.current_streak + 1;
+            } else {
+                newCurrentStreak = 1;
+            }
+
+            const newHighestStreak = Math.max(
+                newCurrentStreak,
+                streak.highest_streak || 0
+            );
+
+            db.run(
+                `UPDATE user_streaks SET current_streak = ?, highest_streak = ?, 
+                        last_active_date = DATE('now') WHERE user_id = ?`,
+                [newCurrentStreak, newHighestStreak, userId], callback
+            );
+        }
+    );
+};
+
 export const completeLessonAttempt = (req, res) => {
     const { attemptId } = req.params;
 
@@ -113,7 +189,13 @@ export const completeLessonAttempt = (req, res) => {
                 db.get(`SELECT user_id, lesson_id FROM lesson_attempts WHERE id = ?`, [attemptId], (err, attempt) => {
                     if (passed) {
                         updateUserProgressAfterCompletedLesson(attempt.user_id, attempt.lesson_id, (err, progress) => {
-                            res.json({ score, passed: true, progress });
+                            if (err) return res.status(500).json({ error: err.message });
+
+                            updateUserStreak(attempt.user_id, (err) => {
+                                if (err) return res.status(500).json({ error: err.message });
+
+                                res.json({ score, passed: true, progress});
+                            });
                         });
                     } else {
                         res.json({ score, passed: false });
