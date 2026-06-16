@@ -99,7 +99,7 @@ export const initializeUserProgress = async (userId) => {
     // 4. Initialize streaks
     await dbRun(
         `INSERT INTO user_streaks (user_id, current_streak, highest_streak, last_active_date)
-         VALUES (?, 0, 0, DATE('now'))
+         VALUES (?, 0, 0, NULL)
              ON CONFLICT(user_id) DO NOTHING`,
         [userId]
     );
@@ -333,7 +333,7 @@ export const openLesson = async (req, res) => {
 /**
  * Updates the user's daily activity streak.
  */
-const updateUserStreak = async (userId) => {
+export const updateUserStreak = async (userId) => {
     const streak = await dbGet(
         `SELECT current_streak, highest_streak, last_active_date
          FROM user_streaks
@@ -346,20 +346,32 @@ const updateUserStreak = async (userId) => {
     const today = new Date().toISOString().split('T')[0];
     const lastActive = streak.last_active_date;
 
+    // Gebruiker heeft vandaag al activiteit gehad
     if (lastActive === today) return;
 
-    let newCurrentStreak = streak.current_streak;
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    let newCurrentStreak;
 
-    if (lastActive === yesterdayStr) {
-        newCurrentStreak += 1;
-    } else {
+    // Eerste activiteit ooit
+    if (!lastActive) {
         newCurrentStreak = 1;
+    } else {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        if (lastActive === yesterdayStr) {
+            // Streak loopt door
+            newCurrentStreak = streak.current_streak + 1;
+        } else {
+            // Streak verbroken
+            newCurrentStreak = 1;
+        }
     }
 
-    const newHighestStreak = Math.max(newCurrentStreak, streak.highest_streak);
+    const newHighestStreak = Math.max(
+        newCurrentStreak,
+        streak.highest_streak
+    );
 
     await dbRun(
         `UPDATE user_streaks
@@ -369,8 +381,7 @@ const updateUserStreak = async (userId) => {
          WHERE user_id = ?`,
         [newCurrentStreak, newHighestStreak, today, userId]
     );
-};
-// GET user streaks
+};// GET user streaks
 export const getUserStreaks = async (req, res) => {
     const { userId } = req.params;
 
