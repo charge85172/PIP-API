@@ -227,6 +227,14 @@ export const getLessonAttempts = (req, res) => {
     });
 };
 
+export const deleteLessonAttempt = (req, res) => {
+    const { attemptId } = req.params;
+    db.run(`DELETE FROM lesson_attempts WHERE id = ?`, [attemptId], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Attempt not found' });
+        res.json({ success: true, message: 'Attempt deleted successfully' });
+    });
+};
 
 export const getLessonResult = (req, res) => {
     const { lessonId, attemptId } = req.params;
@@ -305,6 +313,16 @@ export const getLessonResult = (req, res) => {
     });
 };
 
+export const getCompletedLessonsForUser = (req, res) => {
+    const { userId } = req.params;
+    const lang = getRequestLanguage(req);
+    const sql = `SELECT up.*, l.title, l.description FROM user_progress up JOIN lessons l ON up.lesson_id = l.id WHERE up.user_id = ? AND up.status = 'completed'`;
+    db.all(sql, [userId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(translateContent(rows, lang));
+    });
+};
+
 export const resetLessonCompletion = (req, res) => {
     const { userId, lessonId } = req.params;
 
@@ -320,5 +338,16 @@ export const resetLessonCompletion = (req, res) => {
             lessonId: Number(lessonId),
             deletedRows: this.changes
         });
+    });
+};
+
+export const overrideUserXP = (req, res) => {
+    const { userId } = req.params;
+    const { newXP } = req.body;
+    if (newXP === undefined || typeof newXP !== 'number') return res.status(400).json({ error: 'Valid newXP number required' });
+    db.run(`UPDATE users SET experience = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [newXP, userId], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+        res.json({ success: true, userId: Number(userId), newXP });
     });
 };

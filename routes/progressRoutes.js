@@ -5,23 +5,26 @@ import {
     completeLessonAttempt,
     getLessonResult,
     getLessonAttempts,
+    deleteLessonAttempt,
     resetLessonCompletion,
+    getCompletedLessonsForUser,
+    overrideUserXP
 } from '../controllers/progressController.js';
-import {handlePostXP} from "../controllers/xpController.js";
+import { handlePostXP } from "../controllers/xpController.js";
 
 const router = express.Router();
 
-// Lesson attempts
 router.post('/lessons/:lessonId/start', startLessonAttempt);
 router.post('/attempts/:attemptId/answers', submitAttemptAnswer);
 router.post('/attempts/:attemptId/complete', completeLessonAttempt);
-
-// POST /api/progress/xp
-router.post('/xp', handlePostXP);
-router.get('/lessons/:lessonId/attempts/:attemptId', getLessonAttempts);
+router.get('/lessons/:lessonId/users/:userId/attempts', getLessonAttempts);
 router.get('/lessons/:lessonId/attempts/:attemptId/result', getLessonResult);
+router.delete('/attempts/:attemptId', deleteLessonAttempt);
 
-// delete /api/progress/users/:userId/lessons/:lessonId/completion
+router.post('/xp', handlePostXP);
+router.patch('/users/:userId/xp/override', overrideUserXP);
+
+router.get('/users/:userId/completed', getCompletedLessonsForUser);
 router.delete('/users/:userId/lessons/:lessonId/completion', resetLessonCompletion);
-//hiermee kun je lessen weer "open" zetten voor mensen, was ook nodig om xp in front end te testen.
+
 export default router;
