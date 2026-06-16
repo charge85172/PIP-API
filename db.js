@@ -1,4 +1,3 @@
-// C:/Users/ashfa/Development/TLE4/PIP-API/db.js
 import sqlite3 from 'sqlite3';
 
 const db = new sqlite3.Database('./Database/pip.sqlite', (err) => {
@@ -9,7 +8,6 @@ const db = new sqlite3.Database('./Database/pip.sqlite', (err) => {
     }
 });
 
-// Run this immediately; sqlite3 will queue these to run first
 db.serialize(() => {
     // --- 1. Educational Content ---
     db.run(`CREATE TABLE IF NOT EXISTS courses (
@@ -50,17 +48,17 @@ db.serialize(() => {
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS questions (
-                                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                                     lesson_id INTEGER,
-                                                     question_text TEXT NOT NULL,
-                                                     question_type TEXT,
-                                                     explanation TEXT,
-                                                     image_url TEXT, -- VOEG DEZE REGEL TOE
-                                                     order_index INTEGER,
-                                                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                                     FOREIGN KEY (lesson_id) REFERENCES lessons(id)
-        )`);
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lesson_id INTEGER,
+        question_text TEXT NOT NULL,
+        question_type TEXT,
+        explanation TEXT,
+        image_url TEXT,
+        order_index INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id)
+    )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS answers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,8 +84,8 @@ db.serialize(() => {
         password TEXT NOT NULL,
         digital_skill_level TEXT DEFAULT 'beginner',
         experience INTEGER DEFAULT 0,
-        current_level_id INTEGER DEFAULT 0,
-        on_boarding INTEGER DEFAULT 0,
+        current_level_id INTEGER DEFAULT 1,
+        on_boarding INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (current_level_id) REFERENCES levels(id)
@@ -95,7 +93,7 @@ db.serialize(() => {
 
     db.run(`CREATE TABLE IF NOT EXISTS user_streaks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
+        user_id INTEGER UNIQUE,
         current_streak INTEGER DEFAULT 0,
         highest_streak INTEGER DEFAULT 0,
         last_active_date DATE,
@@ -106,19 +104,19 @@ db.serialize(() => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         level_id INTEGER,
         title TEXT NOT NULL,
-        description TEXT,
+        description TEXT NOT NULL,
         image_url TEXT,
         FOREIGN KEY (level_id) REFERENCES levels(id)
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS user_rewards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        reward_id INTEGER,
+        user_id INTEGER NOT NULL,
+        reward_id INTEGER NOT NULL,
         unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, reward_id),
         FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (reward_id) REFERENCES rewards(id),
-        UNIQUE(user_id, reward_id)
+        FOREIGN KEY (reward_id) REFERENCES rewards(id)
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS hamsterverse (
@@ -135,9 +133,23 @@ db.serialize(() => {
         user_id INTEGER,
         course_id INTEGER,
         status TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (course_id) REFERENCES courses(id),
         UNIQUE(user_id, course_id)
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS user_module_status (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        module_id INTEGER,
+        status TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (module_id) REFERENCES modules(id),
+        UNIQUE(user_id, module_id)
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS user_progress (
@@ -188,7 +200,8 @@ db.serialize(() => {
         activity_id INTEGER NOT NULL,
         xp_amount INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, activity_type, activity_id)
+        UNIQUE(user_id, activity_type, activity_id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )`);
 });
 

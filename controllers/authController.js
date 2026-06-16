@@ -1,5 +1,6 @@
 import db from '../db.js';
 import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
 import { initializeUserProgress } from './userProgressionController.js';
 
 const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
@@ -194,11 +195,33 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
     try {
         const user = await dbGet(`SELECT * FROM users WHERE email = ?`, [email.toLowerCase()]);
+
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+
         }
         const { password: _, ...userWithoutPassword } = user;
-        res.json({ success: true, data: { user: userWithoutPassword } });
+
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: process.env.JWT_EXPIRES_IN || "1y",
+            }
+        );
+
+        res.json({
+            success: true,
+            message: "Login successful",
+            data: {
+                user: userWithoutPassword,
+                token: token
+            }
+        });
+
     } catch (error) {
         res.status(500).json({ success: false, message: 'Login failed.' });
     }

@@ -1,69 +1,85 @@
-import express from 'express';
-// import cors from "cors";
-import authRoutes from './routes/authRoutes.js';
-import userRoutes from './routes/userRoutes.js';
-import courseRoutes from './routes/courseRoutes.js';
-import rewardRoutes from './routes/rewardRoutes.js';
-import progressRoutes from './routes/progressRoutes.js';
-import dashboardRoutes from './routes/dashboardRoutes.js';
+import express from "express";
+import dotenv from "dotenv";
+import helmet from "helmet";
+
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
+import rewardRoutes from "./routes/rewardRoutes.js";
+import progressRoutes from "./routes/progressRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
 import hamsterverseRoutes from './routes/hamsterverseRoutes.js';
 
-const app = express();
+import requireAuth from "./middleware/auth.js";
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-// app.use(express.static("public"));
+dotenv.config();
 
-// CORS headers for React frontend
-// app.use(cors({
-//         origin: process.env.CORS_ORIGIN || "*",
-//         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-//         allowedHeaders: ['Accept', 'Content-Type', 'Authorization', 'X-API-Key'],
-//     }
-// ));
+try {
+    const app = express();
 
-const PORT = process.env.EXPRESS_PORT || 8000;
+    app.disable("x-powered-by");
+    app.use(helmet());
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
 
-// routing
-app.use('/api', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/rewards', rewardRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/hamsterverse', hamsterverseRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use(express.static("public"));
+    // CORS
+    app.use((req, res, next) => {
+        res.header("Access-Control-Allow-Origin", "GET, POST, OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
+        if (req.method === "OPTIONS") {
+            return res.sendStatus(204);
+        }
 
-// Health check endpoint for server
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        message: 'PIP Backend is running'
+        next();
     });
-});
 
-// 404 error if route does not exist
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: `Route ${req.method} ${req.url} not found`
+    const PORT = process.env.EXPRESS_PORT || 8000;
+
+    // Open routes
+    app.use("/api", authRoutes);
+
+    // Protected routes
+    app.use("/api/users", requireAuth, userRoutes);
+    app.use("/api/courses", requireAuth, courseRoutes);
+    app.use("/api/rewards", requireAuth, rewardRoutes);
+    app.use("/api/progress", requireAuth, progressRoutes);
+    app.use("/api/dashboard", requireAuth, dashboardRoutes);
+    app.use('/api/hamsterverse', requireAuth, hamsterverseRoutes);
+    app.use(express.static("public"));
+
+    // Health check
+    app.get("/health", (req, res) => {
+        res.json({
+            status: "OK",
+            timestamp: new Date().toISOString(),
+            message: "PIP Backend is running"
+        });
     });
-});
 
-// Error handler
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    // 404
+    app.use((req, res) => {
+        res.status(404).json({
+            success: false,
+            message: `Route ${req.method} ${req.url} not found`
+        });
     });
-});
 
-app.listen(PORT, () => {
-    console.log(`PIP Backend running on http://localhost:${PORT}`);
-});
+    // Error handler
+    app.use((err, req, res, next) => {
+        console.error("Error:", err);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? err.message : undefined
+        });
+    });
+
+    app.listen(PORT, () => {
+        console.log(`PIP Backend running on http://localhost:${PORT}`);
+    });
+
+} catch (error) {
+    console.error("Server startup error:", error);
+}
