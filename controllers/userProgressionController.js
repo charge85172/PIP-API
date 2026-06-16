@@ -370,3 +370,35 @@ const updateUserStreak = async (userId) => {
         [newCurrentStreak, newHighestStreak, today, userId]
     );
 };
+// GET user streaks
+export const getUserStreaks = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const streak = await dbGet(
+            `SELECT current_streak, highest_streak, last_active_date
+             FROM user_streaks
+             WHERE user_id = ?`,
+            [userId]
+        );
+
+        if (!streak) {
+            return res.status(404).json({
+                success: false,
+                message: 'No streak found for this user.'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: streak
+        });
+
+    } catch (error) {
+        console.error('Get User Streak Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error.'
+        });
+    }
+};
