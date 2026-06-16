@@ -5,54 +5,74 @@ import { translateContent } from '../utils/translator.js';
 export const getModules = (req, res) => {
     const { courseId } = req.params;
     const lang = getRequestLanguage(req);
+    const sql = courseId
+        ? 'SELECT * FROM modules WHERE course_id = ? ORDER BY order_index'
+        : 'SELECT * FROM modules ORDER BY order_index';
+    const params = courseId ? [courseId] : [];
 
-    const sql = `
-        SELECT m.*, c.title AS course_name 
-        FROM modules m 
-        JOIN courses c ON c.id = m.course_id 
-        WHERE c.id = ? 
-        ORDER BY m.order_index
-    `;
-
-    db.all(sql, [courseId], (err, rows) => {
+    db.all(sql, params, (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-
-        const translatedRows = translateContent(rows, lang);
-        res.json(translatedRows);
+        res.json(translateContent(rows, lang));
     });
 };
 
 export const getModule = (req, res) => {
-    const { courseId, moduleId } = req.params;
+    const { moduleId } = req.params;
     const lang = getRequestLanguage(req);
-
-    const sql = `
-        SELECT m.*, c.title AS course_name 
-        FROM modules m 
-        JOIN courses c ON c.id = m.course_id 
-        WHERE m.id = ? AND c.id = ?
-    `;
-
-    db.get(sql, [moduleId, courseId], (err, module) => {
+    const sql = 'SELECT * FROM modules WHERE id = ?';
+    db.get(sql, [moduleId], (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-
-        if (!module) {
+        if (!row) {
             return res.status(404).json({ error: 'Module not found' });
         }
+        res.json(translateContent(row, lang));
+    });
+};
 
-        db.all(`SELECT * FROM lessons WHERE module_id = ? ORDER BY order_index`, [moduleId], (err, lessons) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
-
-            const translatedModule = translateContent(module, lang);
-            translatedModule.lessons = translateContent(lessons, lang);
-
-            res.json(translatedModule);
+export const createModule = (req, res) => {
+    const { course_id, title, description, order_index } = req.body;
+    const sql = 'INSERT INTO modules (course_id, title, description, order_index) VALUES (?, ?, ?, ?)';
+    db.run(sql, [course_id, title, description, order_index], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({
+            success: true,
+            moduleId: this.lastID,
+            message: 'Module created successfully'
         });
+    });
+};
+
+export const updateModule = (req, res) => {
+    const { moduleId } = req.params;
+    const { course_id, title, description, order_index } = req.body;
+    const sql = 'UPDATE modules SET course_id = ?, title = ?, description = ?, order_index = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+    db.run(sql, [course_id, title, description, order_index, moduleId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Module not found' });
+        }
+        res.json({ success: true, message: 'Module updated successfully' });
+    });
+};
+
+export const deleteModule = (req, res) => {
+    const { moduleId } = req.params;
+    const sql = 'DELETE FROM modules WHERE id = ?';
+    db.run(sql, [moduleId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Module not found' });
+        }
+        res.json({ success: true, message: 'Module deleted successfully' });
     });
 };

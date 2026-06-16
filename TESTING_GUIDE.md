@@ -18,27 +18,47 @@ Comprehensive backend testing documentation for the Personal Improvement Platfor
     *   [Get User By ID](#42-get-user-by-id)
     *   [Get User Progress](#43-get-user-progress)
     *   [Get Onboarding Status](#44-get-onboarding-status)
+    *   [Create User](#45-create-user)
+    *   [Update User](#46-update-user)
+    *   [Delete User](#47-delete-user)
+    *   [Get User Streaks](#48-get-user-streaks)
+    *   [Get Completed Lessons for User](#49-get-completed-lessons-for-user)
 5.  [Gamification (XP & Rewards)](#5-gamification-xp--rewards)
-    * [Manually Award XP](#51-manually-award-xp)
-    * [Complete Lesson](#52-complete-lesson)
-    * [Reset Lesson Completion](#53-reset-lesson-completion)
+    *   [Manually Award XP](#51-manually-award-xp)
+    *   [Complete Lesson](#52-complete-lesson)
+    *   [Reset Lesson Completion](#53-reset-lesson-completion)
+    *   [Override User XP](#54-override-user-xp)
 6.  [Lesson Quiz Flow](#6-lesson-quiz-flow)
     *   [Start Lesson Quiz](#61-start-lesson-quiz)
     *   [Submit Answer](#62-submit-answer)
     *   [Complete Quiz Attempt](#63-complete-quiz-attempt)
-    *   [Get Lesson Attempts](#64-get-lesson-attempts)
+    *   [Get Lesson Attempts (Single)](#64-get-lesson-attempts-single)
     *   [Get Lesson Result](#65-get-lesson-result)
+    *   [Get All Lesson Attempts for User](#66-get-all-lesson-attempts-for-user)
+    *   [Delete Lesson Attempt](#67-delete-lesson-attempt)
 7.  [Hamsterverse Data](#7-hamsterverse-data)
     *   [Get Dashboard View](#71-get-dashboard-view)
 8.  [Course & Content Endpoints](#8-course--content-endpoints)
     *   [Get All Courses](#81-get-all-courses)
     *   [Get Course By ID](#82-get-course-by-id)
-    *   [Get Modules for Course](#83-get-modules-for-course)
-    *   [Get Module By ID](#84-get-module-by-id)
-    *   [Get Lessons for Module](#85-get-lessons-for-module)
-    *   [Get Lesson By ID](#86-get-lesson-by-id)
-    *   [Get Questions for Lesson](#87-get-questions-for-lesson)
-    *   [Get Question By ID](#88-get-question-by-id)
+    *   [Create Course](#83-create-course)
+    *   [Update Course](#84-update-course)
+    *   [Delete Course](#85-delete-course)
+    *   [Get Modules for Course](#86-get-modules-for-course)
+    *   [Get Module By ID](#87-get-module-by-id)
+    *   [Create Module](#88-create-module)
+    *   [Update Module](#89-update-module)
+    *   [Delete Module](#810-delete-module)
+    *   [Get Lessons for Module](#811-get-lessons-for-module)
+    *   [Get Lesson By ID](#812-get-lesson-by-id)
+    *   [Create Lesson](#813-create-lesson)
+    *   [Update Lesson](#814-update-lesson)
+    *   [Delete Lesson](#815-delete-lesson)
+    *   [Get Questions for Lesson](#816-get-questions-for-lesson)
+    *   [Get Question By ID](#817-get-question-by-id)
+    *   [Create Question](#818-create-question)
+    *   [Update Question](#819-update-question)
+    *   [Delete Question](#820-delete-question)
 
 ---
 
@@ -412,6 +432,212 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
+### 4.5. Create User
+
+*   **Purpose:** Creates a new user account. This is an administrative endpoint.
+*   **Method:** `POST`
+*   **URL:** `{{BaseURL}}/api/users`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `name` (string, required): User's full name.
+    *   `email` (string, required): Unique email address for the user.
+    *   `password` (string, required): User's password (minimum 6 characters).
+
+#### Request Body Example
+
+```json
+{
+  "name": "New User",
+  "email": "newuser@example.com",
+  "password": "strongpassword123"
+}
+```
+
+#### Success Response (201 Created)
+
+```json
+{
+  "message": "User created successfully",
+  "user": {
+    "id": 3,
+    "name": "New User",
+    "email": "newuser@example.com",
+    "level": 0,
+    "xp": 0,
+    "on_boarding": 0
+  }
+}
+```
+
+#### Error Responses
+
+*   **400 Bad Request - Duplicate Email:**
+    ```json
+    {
+      "message": "Email already registered"
+    }
+    ```
+*   **400 Bad Request - Weak Password:**
+    ```json
+    {
+      "message": "Password must be at least 6 characters long"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 4.6. Update User
+
+*   **Purpose:** Updates an existing user's details.
+*   **Method:** `PUT`
+*   **URL:** `{{BaseURL}}/api/users/:id`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:id` (integer, required): The ID of the user to update.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `name` (string, optional): New name for the user.
+    *   `email` (string, optional): New email for the user (must be unique).
+    *   `password` (string, optional): New password for the user (minimum 6 characters).
+    *   `level` (integer, optional): New level for the user.
+    *   `xp` (integer, optional): New XP for the user.
+    *   `on_boarding` (integer, optional): Onboarding status (0 or 1).
+
+#### Request Body Example
+
+```json
+{
+  "name": "Updated User Name",
+  "level": 2
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "User updated successfully",
+  "user": {
+    "id": 3,
+    "name": "Updated User Name",
+    "email": "newuser@example.com",
+    "level": 2,
+    "xp": 0,
+    "on_boarding": 0
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - User Not Found:**
+    ```json
+    {
+      "message": "User not found"
+    }
+    ```
+*   **400 Bad Request - Invalid Data:**
+    ```json
+    {
+      "message": "Invalid email format"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 4.7. Delete User
+
+*   **Purpose:** Deletes a user account.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/users/:id`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:id` (integer, required): The ID of the user to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "User deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - User Not Found:**
+    ```json
+    {
+      "message": "User not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 4.8. Get User Streaks
+
+*   **Purpose:** Retrieves the current and longest streak for a specific user.
+*   **Method:** `GET`
+*   **URL:** `{{BaseURL}}/api/users/:userId/streak`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:userId` (integer, required): The ID of the user.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "userId": 2,
+  "currentStreak": 7,
+  "longestStreak": 15
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - User Not Found:**
+    ```json
+    {
+      "message": "User not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 4.9. Get Completed Lessons for User
+
+*   **Purpose:** Retrieves a list of all lessons completed by a specific user.
+*   **Method:** `GET`
+*   **URL:** `{{BaseURL}}/api/progress/users/:userId/completed`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:userId` (integer, required): The ID of the user.
+
+#### Success Response (200 OK)
+
+```json
+[
+  {
+    "lessonId": 1,
+    "title": "The Cue-Routine-Reward Cycle",
+    "completedAt": "2023-11-01T10:00:00Z"
+  },
+  {
+    "lessonId": 2,
+    "title": "Identifying Your Cues",
+    "completedAt": "2023-11-02T11:30:00Z"
+  }
+]
+```
+
+#### Error Responses
+
+*   **404 Not Found - User Not Found:**
+    ```json
+    {
+      "message": "User not found or has no completed lessons"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
 ---
 
 ## 5. Gamification (XP & Rewards)
@@ -512,12 +738,69 @@ You can test this functionality with any endpoint that returns user-facing messa
 
 #### Success Response (200 OK)
 
+```json
+{
+  "message": "Lesson completion reset successfully"
+}
+```
 
 #### Error Responses
 
 *   **404 Not Found - No Progress Found:**
+    ```json
+    {
+      "message": "No completion record found for this user and lesson"
+    }
+    ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 *   **500 Internal Server Error:** If a database error occurs.
+
+### 5.4. Override User XP
+
+*   **Purpose:** Directly sets a user's XP to a specific value. This is typically an administrative or debugging tool.
+*   **Method:** `PATCH`
+*   **URL:** `{{BaseURL}}/api/progress/users/:userId/xp/override`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:userId` (integer, required): The ID of the user whose XP to override.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `xpAmount` (integer, required): The new XP value for the user.
+
+#### Request Body Example
+
+```json
+{
+  "xpAmount": 500
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "User XP overridden successfully",
+  "newXp": 500,
+  "newLevel": 5
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - User Not Found:**
+    ```json
+    {
+      "message": "User not found"
+    }
+    ```
+*   **400 Bad Request - Invalid XP Amount:**
+    ```json
+    {
+      "message": "XP amount must be a non-negative integer"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
 
 ---
 
@@ -675,7 +958,7 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 6.4. Get Lesson Attempts
+### 6.4. Get Lesson Attempts (Single)
 
 *   **Purpose:** Retrieves details of a specific quiz attempt for a lesson.
 *   **Method:** `GET`
@@ -741,6 +1024,76 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```json
     {
       "message": "Lesson attempt result not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 6.6. Get All Lesson Attempts for User
+
+*   **Purpose:** Retrieves all quiz attempts made by a specific user for a given lesson.
+*   **Method:** `GET`
+*   **URL:** `{{BaseURL}}/api/progress/lessons/:lessonId/users/:userId/attempts`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:lessonId` (integer, required): The ID of the lesson.
+    *   `:userId` (integer, required): The ID of the user.
+
+#### Success Response (200 OK)
+
+```json
+[
+  {
+    "attemptId": 101,
+    "userId": 2,
+    "lessonId": 1,
+    "score": 80,
+    "passed": true,
+    "attemptedAt": "2023-11-01T10:05:00Z"
+  },
+  {
+    "attemptId": 102,
+    "userId": 2,
+    "lessonId": 1,
+    "score": 50,
+    "passed": false,
+    "attemptedAt": "2023-11-01T10:15:00Z"
+  }
+]
+```
+
+#### Error Responses
+
+*   **404 Not Found - Lesson/User Not Found:**
+    ```json
+    {
+      "message": "Lesson or User not found, or no attempts exist"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 6.7. Delete Lesson Attempt
+
+*   **Purpose:** Deletes a specific quiz attempt. This is typically an administrative or debugging tool.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/progress/attempts/:attemptId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:attemptId` (integer, required): The ID of the quiz attempt to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Lesson attempt deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Attempt Not Found:**
+    ```json
+    {
+      "message": "Lesson attempt not found"
     }
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
@@ -870,7 +1223,129 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.3. Get Modules for Course
+### 8.3. Create Course
+
+*   **Purpose:** Creates a new course.
+*   **Method:** `POST`
+*   **URL:** `{{BaseURL}}/api/courses`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, required): The title of the new course.
+    *   `description` (string, required): A brief description of the course.
+    *   `difficulty` (string, required): The difficulty level (e.g., "Beginner", "Intermediate", "Advanced").
+
+#### Request Body Example
+
+```json
+{
+  "title": "New Course Title",
+  "description": "This is a description for the new course.",
+  "difficulty": "Intermediate"
+}
+```
+
+#### Success Response (201 Created)
+
+```json
+{
+  "message": "Course created successfully",
+  "course": {
+    "id": 3,
+    "title": "New Course Title",
+    "description": "This is a description for the new course.",
+    "difficulty": "Intermediate"
+  }
+}
+```
+
+#### Error Responses
+
+*   **400 Bad Request - Missing Fields:**
+    ```json
+    {
+      "message": "Title, description, and difficulty are required"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.4. Update Course
+
+*   **Purpose:** Updates an existing course's details.
+*   **Method:** `PUT`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course to update.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, optional): New title for the course.
+    *   `description` (string, optional): New description for the course.
+    *   `difficulty` (string, optional): New difficulty level for the course.
+
+#### Request Body Example
+
+```json
+{
+  "title": "Updated Course Title",
+  "difficulty": "Advanced"
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Course updated successfully",
+  "course": {
+    "id": 3,
+    "title": "Updated Course Title",
+    "description": "This is a description for the new course.",
+    "difficulty": "Advanced"
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course Not Found:**
+    ```json
+    {
+      "message": "Course not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.5. Delete Course
+
+*   **Purpose:** Deletes a course.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Course deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course Not Found:**
+    ```json
+    {
+      "message": "Course or Module not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.6. Get Modules for Course
 
 *   **Purpose:** Retrieves a list of all modules belonging to a specific course.
 *   **Method:** `GET`
@@ -908,7 +1383,7 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.4. Get Module By ID
+### 8.7. Get Module By ID
 
 *   **Purpose:** Retrieves details for a specific module within a course.
 *   **Method:** `GET`
@@ -941,7 +1416,141 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.5. Get Lessons for Module
+### 8.8. Create Module
+
+*   **Purpose:** Creates a new module within a specific course.
+*   **Method:** `POST`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course to add the module to.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, required): The title of the new module.
+    *   `description` (string, optional): A description of the module.
+    *   `order` (integer, required): The display order of the module within the course.
+
+#### Request Body Example
+
+```json
+{
+  "title": "New Module Title",
+  "description": "This is a description for the new module.",
+  "order": 3
+}
+```
+
+#### Success Response (201 Created)
+
+```json
+{
+  "message": "Module created successfully",
+  "module": {
+    "id": 103,
+    "courseId": 1,
+    "title": "New Module Title",
+    "description": "This is a description for the new module.",
+    "order": 3
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course Not Found:**
+    ```json
+    {
+      "message": "Course not found"
+    }
+    ```
+*   **400 Bad Request - Missing Fields:**
+    ```json
+    {
+      "message": "Title and order are required"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.9. Update Module
+
+*   **Purpose:** Updates an existing module's details within a course.
+*   **Method:** `PUT`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module to update.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, optional): New title for the module.
+    *   `description` (string, optional): New description for the module.
+    *   `order` (integer, optional): New display order for the module.
+
+#### Request Body Example
+
+```json
+{
+  "title": "Updated Module Title",
+  "order": 1
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Module updated successfully",
+  "module": {
+    "id": 103,
+    "courseId": 1,
+    "title": "Updated Module Title",
+    "description": "This is a description for the new module.",
+    "order": 1
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module Not Found:**
+    ```json
+    {
+      "message": "Course or Module not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.10. Delete Module
+
+*   **Purpose:** Deletes a module from a course.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Module deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module Not Found:**
+    ```json
+    {
+      "message": "Course or Module not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.11. Get Lessons for Module
 
 *   **Purpose:** Retrieves a list of all lessons belonging to a specific module within a course.
 *   **Method:** `GET`
@@ -980,7 +1589,7 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.6. Get Lesson By ID
+### 8.12. Get Lesson By ID
 
 *   **Purpose:** Retrieves details for a specific lesson within a module.
 *   **Method:** `GET`
@@ -1014,7 +1623,149 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.7. Get Questions for Lesson
+### 8.13. Create Lesson
+
+*   **Purpose:** Creates a new lesson within a specific module.
+*   **Method:** `POST`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module to add the lesson to.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, required): The title of the new lesson.
+    *   `content` (string, required): The main content of the lesson (e.g., Markdown or HTML).
+    *   `order` (integer, required): The display order of the lesson within the module.
+    *   `quizAvailable` (boolean, optional): Whether a quiz is available for this lesson (defaults to false).
+
+#### Request Body Example
+
+```json
+{
+  "title": "New Lesson Title",
+  "content": "This is the content of the new lesson.",
+  "order": 3,
+  "quizAvailable": true
+}
+```
+
+#### Success Response (201 Created)
+
+```json
+{
+  "message": "Lesson created successfully",
+  "lesson": {
+    "id": 3,
+    "moduleId": 101,
+    "title": "New Lesson Title",
+    "content": "This is the content of the new lesson.",
+    "order": 3,
+    "quizAvailable": true
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Module Not Found:**
+    ```json
+    {
+      "message": "Module not found"
+    }
+    ```
+*   **400 Bad Request - Missing Fields:**
+    ```json
+    {
+      "message": "Title, content, and order are required"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.14. Update Lesson
+
+*   **Purpose:** Updates an existing lesson's details within a module.
+*   **Method:** `PUT`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons/:lessonId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module the lesson belongs to.
+    *   `:lessonId` (integer, required): The ID of the lesson to update.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `title` (string, optional): New title for the lesson.
+    *   `content` (string, optional): New content for the lesson.
+    *   `order` (integer, optional): New display order for the lesson.
+    *   `quizAvailable` (boolean, optional): New quiz availability status.
+
+#### Request Body Example
+
+```json
+{
+  "title": "Updated Lesson Title",
+  "order": 1
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Lesson updated successfully",
+  "lesson": {
+    "id": 3,
+    "moduleId": 101,
+    "title": "Updated Lesson Title",
+    "content": "This is the content of the new lesson.",
+    "order": 1,
+    "quizAvailable": true
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module/Lesson Not Found:**
+    ```json
+    {
+      "message": "Course, Module, or Lesson not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.15. Delete Lesson
+
+*   **Purpose:** Deletes a lesson from a module.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons/:lessonId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module the lesson belongs to.
+    *   `:lessonId` (integer, required): The ID of the lesson to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Lesson deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module/Lesson Not Found:**
+    ```json
+    {
+      "message": "Course, Module, Lesson, or Question not found"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.16. Get Questions for Lesson
 
 *   **Purpose:** Retrieves all quiz questions for a specific lesson.
 *   **Method:** `GET`
@@ -1062,7 +1813,7 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
 
-### 8.8. Get Question By ID
+### 8.17. Get Question By ID
 
 *   **Purpose:** Retrieves details for a specific quiz question within a lesson.
 *   **Method:** `GET`
@@ -1095,6 +1846,167 @@ You can test this functionality with any endpoint that returns user-facing messa
     ```json
     {
       "message": "Question not found in this lesson"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.18. Create Question
+
+*   **Purpose:** Creates a new quiz question for a specific lesson.
+*   **Method:** `POST`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons/:lessonId/questions`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module the lesson belongs to.
+    *   `:lessonId` (integer, required): The ID of the lesson to add the question to.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `text` (string, required): The text of the question.
+    *   `options` (array of objects, required): An array of answer options, each with `id` (integer) and `text` (string).
+    *   `correctAnswerId` (integer, required): The `id` of the correct answer option from the `options` array.
+
+#### Request Body Example
+
+```json
+{
+  "text": "What is the capital of France?",
+  "options": [
+    {"id": 1, "text": "Berlin"},
+    {"id": 2, "text": "Madrid"},
+    {"id": 3, "text": "Paris"},
+    {"id": 4, "text": "Rome"}
+  ],
+  "correctAnswerId": 3
+}
+```
+
+#### Success Response (201 Created)
+
+```json
+{
+  "message": "Question created successfully",
+  "question": {
+    "id": 3,
+    "lessonId": 1,
+    "text": "What is the capital of France?",
+    "options": [
+      {"id": 1, "text": "Berlin"},
+      {"id": 2, "text": "Madrid"},
+      {"id": 3, "text": "Paris"},
+      {"id": 4, "text": "Rome"}
+    ],
+    "correctAnswerId": 3
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Lesson Not Found:**
+    ```json
+    {
+      "message": "Lesson not found"
+    }
+    ```
+*   **400 Bad Request - Missing Fields/Invalid Options:**
+    ```json
+    {
+      "message": "Question text, options, and correct answer ID are required"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.19. Update Question
+
+*   **Purpose:** Updates an existing quiz question for a specific lesson.
+*   **Method:** `PUT`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons/:lessonId/questions/:questionId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module the lesson belongs to.
+    *   `:lessonId` (integer, required): The ID of the lesson the question belongs to.
+    *   `:questionId` (integer, required): The ID of the question to update.
+*   **Request Headers:**
+    *   `Content-Type: application/json`
+*   **Request Body:**
+    *   `text` (string, optional): New text for the question.
+    *   `options` (array of objects, optional): New array of answer options.
+    *   `correctAnswerId` (integer, optional): New `id` of the correct answer option.
+
+#### Request Body Example
+
+```json
+{
+  "text": "What is the capital of Germany?",
+  "correctAnswerId": 1
+}
+```
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Question updated successfully",
+  "question": {
+    "id": 3,
+    "lessonId": 1,
+    "text": "What is the capital of Germany?",
+    "options": [
+      {"id": 1, "text": "Berlin"},
+      {"id": 2, "text": "Madrid"},
+      {"id": 3, "text": "Paris"},
+      {"id": 4, "text": "Rome"}
+    ],
+    "correctAnswerId": 1
+  }
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module/Lesson/Question Not Found:**
+    ```json
+    {
+      "message": "Course, Module, Lesson, or Question not found"
+    }
+    ```
+*   **400 Bad Request - Invalid Options/Correct Answer:**
+    ```json
+    {
+      "message": "Correct answer ID must be one of the provided options"
+    }
+    ```
+*   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 8.20. Delete Question
+
+*   **Purpose:** Deletes a quiz question from a lesson.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/courses/:courseId/modules/:moduleId/lessons/:lessonId/questions/:questionId`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:courseId` (integer, required): The ID of the course the module belongs to.
+    *   `:moduleId` (integer, required): The ID of the module the lesson belongs to.
+    *   `:lessonId` (integer, required): The ID of the lesson the question belongs to.
+    *   `:questionId` (integer, required): The ID of the question to delete.
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "Question deleted successfully"
+}
+```
+
+#### Error Responses
+
+*   **404 Not Found - Course/Module/Lesson/Question Not Found:**
+    ```json
+    {
+      "message": "Course, Module, Lesson, or Question not found"
     }
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
