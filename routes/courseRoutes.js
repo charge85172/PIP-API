@@ -1,8 +1,8 @@
 import express from 'express';
-import { getCourses, getCourse, createCourse, updateCourse, } from '../controllers/courseController.js';
-import { getModules, getModule, createModule, updateModule, } from '../controllers/moduleController.js';
-import { getLessons, getLesson, createLesson, updateLesson, } from '../controllers/lessonController.js';
-import { getQuestions, getQuestion, createQuestion, updateQuestion, } from '../controllers/questionController.js';
+import {getCourses, getCourse, createCourse, updateCourse, deleteCourse,} from '../controllers/courseController.js';
+import {getModules, getModule, createModule, updateModule, deleteModule,} from '../controllers/moduleController.js';
+import {getLessons, getLesson, createLesson, updateLesson, deleteLesson,} from '../controllers/lessonController.js';
+import { getQuestions, getQuestion, createQuestion, updateQuestion, deleteQuestion } from '../controllers/questionController.js';
 import { validateId } from "../middleware/validateId.js";
 
 const router = express.Router();

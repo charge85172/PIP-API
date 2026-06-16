@@ -1,5 +1,15 @@
 import express from 'express';
-import { startLessonAttempt, submitAttemptAnswer, completeLessonAttempt, getLessonResult, getLessonAttempts, deleteLessonAttempt, resetLessonCompletion, getCompletedLessonsForUser, } from '../controllers/progressController.js';
+import {
+    startLessonAttempt,
+    submitAttemptAnswer,
+    completeLessonAttempt,
+    getLessonResult,
+    getLessonAttempts,
+    deleteLessonAttempt,
+    resetLessonCompletion,
+    getCompletedLessonsForUser,
+    overrideUserXP,
+} from '../controllers/progressController.js';
 import { handlePostXP } from "../controllers/xpController.js";
 import isUser from "../middleware/isUser.js";
 import { validateId } from "../middleware/validateId.js";
