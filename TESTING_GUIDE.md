@@ -19,8 +19,9 @@ Comprehensive backend testing documentation for the Personal Improvement Platfor
     *   [Get User Progress](#43-get-user-progress)
     *   [Get Onboarding Status](#44-get-onboarding-status)
 5.  [Gamification (XP & Rewards)](#5-gamification-xp--rewards)
-    *   [Manually Award XP](#51-manually-award-xp)
-    *   [Complete Lesson](#52-complete-lesson)
+    * [Manually Award XP](#51-manually-award-xp)
+    * [Complete Lesson](#52-complete-lesson)
+    * [Reset Lesson Completion](#53-reset-lesson-completion)
 6.  [Lesson Quiz Flow](#6-lesson-quiz-flow)
     *   [Start Lesson Quiz](#61-start-lesson-quiz)
     *   [Submit Answer](#62-submit-answer)
@@ -498,6 +499,25 @@ You can test this functionality with any endpoint that returns user-facing messa
     }
     ```
 *   **401 Unauthorized:** If no valid JWT token is provided.
+
+### 5.3. Reset Lesson Completion
+
+*   **Purpose:** Removes the completion status of a specific lesson for a user. This allows the lesson to be taken again and is useful for testing XP triggers or progression logic.
+*   **Method:** `DELETE`
+*   **URL:** `{{BaseURL}}/api/progress/users/:userId/lessons/:lessonId/completion`
+*   **Authentication:** Required (JWT in `Authorization` header).
+*   **Path Parameters:**
+    *   `:userId` (integer, required): The ID of the user.
+    *   `:lessonId` (integer, required): The ID of the lesson to reset.
+
+#### Success Response (200 OK)
+
+
+#### Error Responses
+
+*   **404 Not Found - No Progress Found:**
+*   **401 Unauthorized:** If no valid JWT token is provided.
+*   **500 Internal Server Error:** If a database error occurs.
 
 ---
 
