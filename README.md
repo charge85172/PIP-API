@@ -121,7 +121,7 @@ The database structure is shown below.
 
 Add your ERD image to the repository and update the path if necessary.
 
-![PIP ERD](./docs/PIP_ERD.png)
+![PIP ERD](public/images/PIP_ERD.webp)
 Core Relationships
 Users
 │
